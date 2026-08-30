@@ -1,0 +1,16 @@
+# Meteoris HDF5 event viewer configuration.
+
+[color_scale]
+# Initial waterfall color limits, in PSD density dB/Hz.
+# CLI --db-min / --db-max override these values.
+db_min = -80.0
+db_max = -40.0
+
+# Allowed range of the two interactive color-scale sliders.
+slider_min_db = -180.0
+slider_max_db = 0.0
+slider_step_db = 1.0
+
+[plot]
+figure_width = 11.5
+figure_height = 7.2

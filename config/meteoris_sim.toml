@@ -1,0 +1,215 @@
+# Meteoris configuration for the synthetic SoapySDR source.
+# The simulator generates two independent finite events in every period:
+#   1) a near-zero stationary echo with configurable rise/hold/fade envelope;
+#   2) one clean linear chirp with independently configurable timing/amplitude.
+# No permanent carrier is present outside the stationary event.
+# Stochastic CS8 quantization suppresses coherent intermodulation replicas.
+# Command-line options override normal Meteoris values in this file.
+
+[sdr]
+driver = "meteoris_sim"
+sample_rate = 10000000
+# Set to 0 to leave frequency unchanged by Meteoris.
+center_frequency = 143051460
+# Initial gain. When AGC is enabled this is the starting value.
+gain = 20
+
+[simulator]
+# The complete synthetic pattern repeats every this many seconds.
+period_s = 8.0
+
+# Approximate complex-noise amplitude in native CS8 counts at gain=20 dB.
+noise_amplitude = 5.0
+
+# Finite near-zero echo. After Meteoris shift_hz=-1 MHz, offset_hz is the
+# position seen in the final PSD.
+stationary_enabled = true
+stationary_start_s = 0.8
+stationary_rise_s = 0.35
+stationary_hold_s = 1.0
+stationary_fall_s = 0.65
+stationary_offset_hz = 0
+stationary_amplitude = 3.0
+
+# Separate descending chirp. Offsets are relative to the +1 MHz translated
+# center, therefore they appear directly at these final-PSD offsets.
+chirp_enabled = true
+chirp_start_s = 4.0
+chirp_duration_s = 1.2
+chirp_start_offset_hz = 38000
+chirp_end_offset_hz = 12000
+chirp_amplitude = 6.0
+
+[dsp]
+shift_hz = -1000000
+decimation_stage1 = 8
+decimation_stage2 = 5
+bandwidth_hz = 100000
+# Out-of-band attenuation of the FIR decimation filters, in dB.
+attenuation_db = 60
+
+[psd]
+fft_size = 4096
+
+[runtime]
+# Detach from the terminal and run in the background.
+# Command-line --daemon / --no-daemon overrides this setting.
+daemon = false
+
+# 0 = run continuously until SIGINT/SIGTERM.
+# A positive value stops automatically after this many seconds.
+run_seconds = 12
+
+# Number of SoapySDR streaming buffers.
+stream_buffers = 16
+
+# Use SoapySDR direct-buffer access when supported.
+direct_buffer = true
+
+# FIR1 block-kernel worker count.
+# 1 uses SIMD on one core and is the safest default.
+# 2 splits FIR1 outputs across the caller plus one persistent worker thread.
+# Benchmark both values on the target CPU; two threads help only when FIR1 is CPU-bound.
+fir1_threads = 1
+
+[logging]
+# Runtime logging level: trace, debug, info, warn, error, critical, or off.
+# Detector periodic diagnostics are DEBUG messages.
+level = "debug"
+# ANSI terminal colors by level in foreground mode. The text log never
+# contains color escape sequences.
+color = true
+
+# Write the same selected log levels to a plain text file. Enabled by default
+# in both foreground and daemon mode. Daemon mode uses the file only: no syslog.
+file_enabled = true
+file = "meteoris.log"
+# false appends if today's dated log already exists; true truncates today's
+# log when Meteoris starts. Later daily rotations always append/create safely.
+file_truncate = false
+
+# Rotate the text log at a fixed UTC boundary, using the same logical-day
+# convention as output.daily_rotate_time. A base "meteoris.log" becomes
+# "meteoris_YYYYMMDD.log".
+daily_rotation = true
+daily_rotate_time = "00:00"
+
+[agc]
+# Low-cost AGC based on clipping of native CS8 ADC samples. The clipping count
+# is collected during the existing 10 Msps DSP pass, so no extra input scan is done.
+enabled = false
+# Keep the exponentially-smoothed fraction of clipped complex samples near/below this value.
+target_saturation_percent = 1.0
+# Response/smoothing time constant. Larger values reduce gain pumping.
+time_constant_s = 2.0
+# Treat I or Q magnitudes at/above this native CS8 level as saturated/near-saturated.
+clip_level = 126
+# -1 uses the gain range reported by the Soapy driver.
+min_gain_db = -1
+max_gain_db = -1
+# Maximum gain change per AGC update.
+max_step_db = 1.0
+
+[recording]
+# "triggered": detector controls recording.
+# "continuous": detector is ignored and PSDs are recorded in bounded segments.
+mode = "triggered"
+# Maximum continuous segment duration. Used only in continuous mode.
+segment_seconds = 15.0
+# 0 = unlimited; otherwise stop cleanly after this many complete segments.
+segment_count = 0
+
+[detector]
+# Compile-time registered detector implementation selected at runtime.
+# Phase 1 currently provides: "peak_tracker".
+plugin = "peak_tracker"
+# 0 lets a future plugin choose automatically. The current peak_tracker is
+# synchronous/serial but the interface already carries this resource budget.
+threads = 1
+# Shared PSD preprocessing. Means are computed in LINEAR PSD power.
+# Frequency mean is centered; use an odd number of bins.
+frequency_mean_bins = 5
+# Causal time mean: current PSD plus previous PSDs.
+time_mean_psds = 3
+
+# A spectral local maximum becomes a candidate when the doubly-smoothed PSD is
+# this many dB above the current whole-band MEDIAN background.
+peak_threshold_db = 5.0
+
+# Nearby local maxima are consolidated by keeping the strongest peak.
+min_peak_separation_hz = 300
+
+# Safety limit after consolidation. Strongest peaks are retained; excess peaks
+# are dropped and a rate-limited warning is emitted.
+max_peaks_per_psd = 20
+
+# 0 disables periodic detector diagnostics.
+diagnostic_interval_s = 1.0
+
+# Common recording context around the transition of active-track count 0 <-> >0.
+pre_context_s = 0.5
+post_context_s = 1.0
+
+# Maximum event duration; 0 disables forced cutoff.
+max_event_seconds = 15
+# Trigger inhibit after a forced cutoff.
+rearm_seconds = 1.0
+
+[detector.stationary]
+enabled = true
+# Only tracks inside this near-zero region can become stationary detections.
+min_hz = -5000
+max_hz = 5000
+# Maximum frequency error for association to the last stationary position.
+max_df_hz = 250
+# Tentative track must reach this age and occupancy before becoming active.
+activation_time_s = 0.5
+activation_fraction = 0.50
+# Active/tentative stationary track survives gaps up to this time.
+lost_s = 0.30
+# Average |df/dt| at or below this value classifies an unknown track stationary.
+max_drift_hz_s = 1000
+
+[detector.chirp]
+enabled = true
+# Chirps may occur across the complete observation band.
+min_hz = -50000
+max_hz = 50000
+# Matching window around the predicted frequency.
+max_df_hz = 1500
+activation_time_s = 0.05
+activation_fraction = 0.70
+# Chirp tracks are allowed only short gaps because prediction uncertainty grows fast.
+lost_s = 0.08
+# Average drift range used to classify a generic tentative track as a chirp.
+min_drift_hz_s = 3000
+max_drift_hz_s = 150000
+
+[output]
+# One HDF5 file is created/appended per UTC day.
+directory = "./data"
+file_prefix = "meteoris_sim"
+# 0 disables gzip; 1 is a good low-CPU default for a real-time recorder.
+hdf5_compression = 1
+
+# HDF5 Single-Writer/Multiple-Reader mode. Keep enabled to allow
+# meteoris_plot to open the active daily file while Meteoris is recording.
+swmr = true
+
+# Publish newly written rows to SWMR readers at this interval.
+# 0 flushes after every saved PSD; 1 second is a low-overhead default.
+swmr_flush_seconds = 1.0
+
+# UTC time when a new logical daily HDF5 file should begin. Format: HH:MM.
+# If an event is active at the boundary, rotation is delayed until the complete
+# event, including post-trigger context, has been saved.
+daily_rotate_time = "00:00"
+
+# Stop Meteoris if the HDF5 file grows faster than this sustained rate.
+# The rate is checked over 10-second windows to ignore short HDF5 allocation bursts.
+# 0 disables the growth-rate safety check.
+max_growth_mb_per_min = 100
+
+# Stop Meteoris when available space on the output filesystem falls below this value.
+# 0 disables the free-space safety check.
+min_free_space_gb = 2

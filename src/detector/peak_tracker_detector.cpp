@@ -660,47 +660,58 @@ public:
         _objects.clear();
     }
 
-    Result process(const Frame &frame) override
+    Result process(const Frame &frame, const ProcessOptions &options) override
     {
         if (frame.psd == nullptr || frame.bins != _environment.bins)
             throw std::runtime_error("peak_tracker: PSD geometry changed");
 
-        const PeakDetectorResult d = _core->process(frame, true);
+        const bool trackingEnabled =
+            options.mode == ProcessingMode::Full;
+        const PeakDetectorResult d =
+            _core->process(frame, trackingEnabled);
 
         _metrics.clear();
         _objects.clear();
-        _metrics.reserve(12);
-        _objects.reserve(_core->tracks().size());
 
-        addMetric("background_db_hz", d.backgroundDbHz, "dB/Hz");
-        addMetric("raw_candidates", double(d.rawCandidates), "count");
-        addMetric("close_suppressed", double(d.closeSuppressed), "count");
-        addMetric("dropped_by_max_peaks", double(d.droppedByLimit), "count");
-        addMetric("retained_peaks", double(d.peakCount), "count");
-        addMetric("track_count", double(d.trackCount), "count");
-        addMetric("active_tracks", double(d.activeTracks), "count");
-        addMetric("stationary_active", double(d.stationaryActive), "count");
-        addMetric("chirp_active", double(d.chirpActive), "count");
-
-        if (d.haveStrongestPeak)
+        if (trackingEnabled && options.collectDebug)
         {
-            addMetric("strongest_peak_frequency_hz",
-                      d.strongestPeak.frequencyHz, "Hz");
-            addMetric("strongest_peak_level_db_hz",
-                      d.strongestPeak.psdDbHz, "dB/Hz");
-            addMetric("strongest_peak_excess_db",
-                      d.strongestPeak.excessDb, "dB");
-        }
+            _metrics.reserve(12);
+            _objects.reserve(_core->tracks().size());
 
-        const std::vector<PeakTrack> &tracks = _core->tracks();
-        for (size_t i = 0; i < tracks.size(); ++i)
-            addTrackObject(tracks[i], frame.timestampNs);
+            addMetric("background_db_hz", d.backgroundDbHz, "dB/Hz");
+            addMetric("raw_candidates", double(d.rawCandidates), "count");
+            addMetric("close_suppressed", double(d.closeSuppressed), "count");
+            addMetric("dropped_by_max_peaks", double(d.droppedByLimit), "count");
+            addMetric("retained_peaks", double(d.peakCount), "count");
+            addMetric("track_count", double(d.trackCount), "count");
+            addMetric("active_tracks", double(d.activeTracks), "count");
+            addMetric("stationary_active", double(d.stationaryActive), "count");
+            addMetric("chirp_active", double(d.chirpActive), "count");
+
+            if (d.haveStrongestPeak)
+            {
+                addMetric("strongest_peak_frequency_hz",
+                          d.strongestPeak.frequencyHz, "Hz");
+                addMetric("strongest_peak_level_db_hz",
+                          d.strongestPeak.psdDbHz, "dB/Hz");
+                addMetric("strongest_peak_excess_db",
+                          d.strongestPeak.excessDb, "dB");
+            }
+
+            const std::vector<PeakTrack> &tracks = _core->tracks();
+            for (size_t i = 0; i < tracks.size(); ++i)
+                addTrackObject(tracks[i], frame.timestampNs);
+        }
 
         Result r;
         r.state = !d.ready ? State::WarmingUp
                            : (d.active ? State::Active : State::Idle);
         r.activeObjects = static_cast<uint32_t>(d.activeTracks);
         r.frameMaxDbHz = d.frameMaxDbHz;
+        r.rawCandidates = d.rawCandidates;
+        r.closeSuppressed = d.closeSuppressed;
+        r.droppedByLimit = d.droppedByLimit;
+        r.retainedPeaks = d.peakCount;
         r.debug.metrics = _metrics.empty() ? nullptr : _metrics.data();
         r.debug.metricCount = _metrics.size();
         r.debug.objects = _objects.empty() ? nullptr : _objects.data();

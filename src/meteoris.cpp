@@ -220,6 +220,23 @@ struct Config
     double detectorChirpMinDriftHzS = 3000.0;
     double detectorChirpMaxDriftHzS = 150000.0;
 
+    // Echoes-style scan-power detector parameters.
+    std::string detectorEchoesThresholdMode = "automatic";
+    double detectorEchoesDetectionCenterHz = 0.0;
+    double detectorEchoesDetectionWidthHz = 0.0;
+    double detectorEchoesAbsoluteLowerDbHz = -90.0;
+    double detectorEchoesAbsoluteUpperDbHz = -85.0;
+    double detectorEchoesDifferentialLowerDb = 4.0;
+    double detectorEchoesDifferentialUpperDb = 7.0;
+    double detectorEchoesAutomaticLowerOffsetDb = 4.0;
+    double detectorEchoesAutomaticUpperDeltaDb = 3.0;
+    double detectorEchoesAutomaticWarmupSeconds = 5.0;
+    double detectorEchoesAutomaticBaselineTauSeconds = 30.0;
+    double detectorEchoesAutomaticStddevWindowSeconds = 1.0;
+    double detectorEchoesAutomaticEndStddevFactor = 2.0;
+    double detectorEchoesDelayBeforeTriggerSeconds = 0.0;
+    double detectorEchoesJoinEventsSeconds = 1.0;
+
     // Recording/event parameters remain common to all active tracks.
     double detectorPreContextSeconds = 0.5;
     double detectorPostContextSeconds = 1.0;
@@ -1649,6 +1666,21 @@ public:
         selection.peakTracker.chirpLostSeconds = _cfg.detectorChirpLostSeconds;
         selection.peakTracker.chirpMinDriftHzS = _cfg.detectorChirpMinDriftHzS;
         selection.peakTracker.chirpMaxDriftHzS = _cfg.detectorChirpMaxDriftHzS;
+        selection.echoesAutomatic.thresholdMode = _cfg.detectorEchoesThresholdMode;
+        selection.echoesAutomatic.detectionCenterHz = _cfg.detectorEchoesDetectionCenterHz;
+        selection.echoesAutomatic.detectionWidthHz = _cfg.detectorEchoesDetectionWidthHz;
+        selection.echoesAutomatic.absoluteLowerDbHz = _cfg.detectorEchoesAbsoluteLowerDbHz;
+        selection.echoesAutomatic.absoluteUpperDbHz = _cfg.detectorEchoesAbsoluteUpperDbHz;
+        selection.echoesAutomatic.differentialLowerDb = _cfg.detectorEchoesDifferentialLowerDb;
+        selection.echoesAutomatic.differentialUpperDb = _cfg.detectorEchoesDifferentialUpperDb;
+        selection.echoesAutomatic.automaticLowerOffsetDb = _cfg.detectorEchoesAutomaticLowerOffsetDb;
+        selection.echoesAutomatic.automaticUpperDeltaDb = _cfg.detectorEchoesAutomaticUpperDeltaDb;
+        selection.echoesAutomatic.automaticWarmupSeconds = _cfg.detectorEchoesAutomaticWarmupSeconds;
+        selection.echoesAutomatic.automaticBaselineTimeConstantSeconds = _cfg.detectorEchoesAutomaticBaselineTauSeconds;
+        selection.echoesAutomatic.automaticStddevWindowSeconds = _cfg.detectorEchoesAutomaticStddevWindowSeconds;
+        selection.echoesAutomatic.automaticEndStddevFactor = _cfg.detectorEchoesAutomaticEndStddevFactor;
+        selection.echoesAutomatic.delayBeforeTriggerSeconds = _cfg.detectorEchoesDelayBeforeTriggerSeconds;
+        selection.echoesAutomatic.joinEventsSeconds = _cfg.detectorEchoesJoinEventsSeconds;
 
         _detector = meteoris::detector::create(selection, env);
         if (_detector->info().apiVersion != meteoris::detector::DETECTOR_API_VERSION)
@@ -1677,10 +1709,12 @@ public:
         {
             if (frame.timestampNs < _rearmUntilNs)
             {
-                // Keep plugin smoothing/history current but remove tracks so
-                // rearm cannot inherit an old candidate.
-                (void)_detector->process(makeDetectorFrame(frame));
-                _detector->reset();
+                // Advance smoothing/history without association or track
+                // construction. PreprocessOnly also keeps tracks empty.
+                meteoris::detector::ProcessOptions options;
+                options.mode =
+                    meteoris::detector::ProcessingMode::PreprocessOnly;
+                (void)_detector->process(makeDetectorFrame(frame), options);
                 _pre.clear();
                 return;
             }
@@ -1696,8 +1730,10 @@ public:
                 std::llround(_cfg.detectorMaxEventSeconds * 1e9));
             if (frame.timestampNs >= _eventStartNs + maxNs)
             {
-                (void)_detector->process(makeDetectorFrame(frame));
-                _detector->reset();
+                meteoris::detector::ProcessOptions options;
+                options.mode =
+                    meteoris::detector::ProcessingMode::PreprocessOnly;
+                (void)_detector->process(makeDetectorFrame(frame), options);
                 _active = false;
                 _postRemaining = 0;
                 _pre.clear();
@@ -1711,9 +1747,12 @@ public:
             }
         }
 
+        meteoris::detector::ProcessOptions processOptions;
+        processOptions.collectDebug = diagnosticDue(frame);
+
         const auto processStart = std::chrono::steady_clock::now();
         const meteoris::detector::Result decision =
-            _detector->process(makeDetectorFrame(frame));
+            _detector->process(makeDetectorFrame(frame), processOptions);
         const auto processEnd = std::chrono::steady_clock::now();
         _lastDetectorProcessUs =
             std::chrono::duration<double, std::micro>(
@@ -1839,18 +1878,13 @@ private:
         }
     }
 
-    static double metricValue(
-        const meteoris::detector::Result &d,
-        const char *name,
-        const double fallback = 0.0)
+    bool diagnosticDue(const PsdFrame &frame) const
     {
-        for (size_t i = 0; i < d.debug.metricCount; ++i)
-        {
-            const auto &m = d.debug.metrics[i];
-            if (m.name != nullptr && std::strcmp(m.name, name) == 0)
-                return m.value;
-        }
-        return fallback;
+        if (_cfg.detectorDiagnosticIntervalSeconds <= 0.0) return false;
+        const uint64_t intervalNs = static_cast<uint64_t>(
+            std::llround(_cfg.detectorDiagnosticIntervalSeconds * 1e9));
+        return _lastDiagnosticNs == 0 ||
+               frame.timestampNs >= _lastDiagnosticNs + intervalNs;
     }
 
     void remember(const PsdFrame &frame, const float maxDb)
@@ -1865,17 +1899,14 @@ private:
 
     void consumeDebugCounters(const meteoris::detector::Result &d)
     {
-        _peakLimitDrops += static_cast<uint64_t>(
-            std::max(0.0, metricValue(d, "dropped_by_max_peaks")));
-        _closeSuppressions += static_cast<uint64_t>(
-            std::max(0.0, metricValue(d, "close_suppressed")));
+        _peakLimitDrops += d.droppedByLimit;
+        _closeSuppressions += d.closeSuppressed;
     }
 
     void emitWarnings(const PsdFrame &frame,
                       const meteoris::detector::Result &d)
     {
-        const double dropped = metricValue(d, "dropped_by_max_peaks");
-        if (dropped <= 0.0) return;
+        if (d.droppedByLimit == 0) return;
 
         const uint64_t intervalNs = UINT64_C(10) * UINT64_C(1000000000);
         if (_lastWarningNs != 0 &&
@@ -1887,10 +1918,10 @@ private:
             "detector={} peak warning: raw_candidates={} close_suppressed={} "
             "dropped_by_max_peaks={} retained_peaks={}",
             _cfg.detectorPlugin,
-            static_cast<uint64_t>(metricValue(d, "raw_candidates")),
-            static_cast<uint64_t>(metricValue(d, "close_suppressed")),
-            static_cast<uint64_t>(dropped),
-            static_cast<uint64_t>(metricValue(d, "retained_peaks")));
+            d.rawCandidates,
+            d.closeSuppressed,
+            d.droppedByLimit,
+            d.retainedPeaks);
     }
 
     void printDiagnostic(const PsdFrame &frame,
@@ -2071,7 +2102,23 @@ std::string effectiveToml(const Config &c)
       << "activation_fraction = " << c.detectorChirpActivationFraction << "\n"
       << "lost_s = " << c.detectorChirpLostSeconds << "\n"
       << "min_drift_hz_s = " << c.detectorChirpMinDriftHzS << "\n"
-      << "max_drift_hz_s = " << c.detectorChirpMaxDriftHzS << "\n\n[output]\n"
+      << "max_drift_hz_s = " << c.detectorChirpMaxDriftHzS << "\n"
+      << "\n[detector.echoes]\n"
+      << "threshold_mode = \"" << c.detectorEchoesThresholdMode << "\"\n"
+      << "detection_center_hz = " << c.detectorEchoesDetectionCenterHz << "\n"
+      << "detection_width_hz = " << c.detectorEchoesDetectionWidthHz << "\n"
+      << "absolute_lower_db_hz = " << c.detectorEchoesAbsoluteLowerDbHz << "\n"
+      << "absolute_upper_db_hz = " << c.detectorEchoesAbsoluteUpperDbHz << "\n"
+      << "differential_lower_db = " << c.detectorEchoesDifferentialLowerDb << "\n"
+      << "differential_upper_db = " << c.detectorEchoesDifferentialUpperDb << "\n"
+      << "automatic_lower_offset_db = " << c.detectorEchoesAutomaticLowerOffsetDb << "\n"
+      << "automatic_upper_delta_db = " << c.detectorEchoesAutomaticUpperDeltaDb << "\n"
+      << "automatic_warmup_s = " << c.detectorEchoesAutomaticWarmupSeconds << "\n"
+      << "automatic_baseline_time_constant_s = " << c.detectorEchoesAutomaticBaselineTauSeconds << "\n"
+      << "automatic_stddev_window_s = " << c.detectorEchoesAutomaticStddevWindowSeconds << "\n"
+      << "automatic_end_stddev_factor = " << c.detectorEchoesAutomaticEndStddevFactor << "\n"
+      << "delay_before_trigger_s = " << c.detectorEchoesDelayBeforeTriggerSeconds << "\n"
+      << "join_events_closer_than_s = " << c.detectorEchoesJoinEventsSeconds << "\n\n[output]\n"
       << "directory = \"" << c.detectorOutputDirectory << "\"\n"
       << "file_prefix = \"" << c.detectorFilePrefix << "\"\n"
       << "hdf5_compression = " << c.detectorCompression << "\n"
@@ -2216,6 +2263,21 @@ void applyTomlValue(Config &c, const std::string &key, const std::string &raw)
     else if (key == "detector.chirp.lost_s") c.detectorChirpLostSeconds = std::stod(v);
     else if (key == "detector.chirp.min_drift_hz_s") c.detectorChirpMinDriftHzS = std::stod(v);
     else if (key == "detector.chirp.max_drift_hz_s") c.detectorChirpMaxDriftHzS = std::stod(v);
+    else if (key == "detector.echoes.threshold_mode") c.detectorEchoesThresholdMode = unquote(v);
+    else if (key == "detector.echoes.detection_center_hz") c.detectorEchoesDetectionCenterHz = std::stod(v);
+    else if (key == "detector.echoes.detection_width_hz") c.detectorEchoesDetectionWidthHz = std::stod(v);
+    else if (key == "detector.echoes.absolute_lower_db_hz") c.detectorEchoesAbsoluteLowerDbHz = std::stod(v);
+    else if (key == "detector.echoes.absolute_upper_db_hz") c.detectorEchoesAbsoluteUpperDbHz = std::stod(v);
+    else if (key == "detector.echoes.differential_lower_db") c.detectorEchoesDifferentialLowerDb = std::stod(v);
+    else if (key == "detector.echoes.differential_upper_db") c.detectorEchoesDifferentialUpperDb = std::stod(v);
+    else if (key == "detector.echoes.automatic_lower_offset_db") c.detectorEchoesAutomaticLowerOffsetDb = std::stod(v);
+    else if (key == "detector.echoes.automatic_upper_delta_db") c.detectorEchoesAutomaticUpperDeltaDb = std::stod(v);
+    else if (key == "detector.echoes.automatic_warmup_s") c.detectorEchoesAutomaticWarmupSeconds = std::stod(v);
+    else if (key == "detector.echoes.automatic_baseline_time_constant_s") c.detectorEchoesAutomaticBaselineTauSeconds = std::stod(v);
+    else if (key == "detector.echoes.automatic_stddev_window_s") c.detectorEchoesAutomaticStddevWindowSeconds = std::stod(v);
+    else if (key == "detector.echoes.automatic_end_stddev_factor") c.detectorEchoesAutomaticEndStddevFactor = std::stod(v);
+    else if (key == "detector.echoes.delay_before_trigger_s") c.detectorEchoesDelayBeforeTriggerSeconds = std::stod(v);
+    else if (key == "detector.echoes.join_events_closer_than_s") c.detectorEchoesJoinEventsSeconds = std::stod(v);
     else if (key == "output.directory") c.detectorOutputDirectory = unquote(v);
     else if (key == "output.file_prefix") c.detectorFilePrefix = unquote(v);
     else if (key == "output.hdf5_compression") c.detectorCompression = std::stoi(v);
@@ -2669,16 +2731,6 @@ Config parseArgs(const int argc, char **argv)
 
     if (c.detectorEnabled)
     {
-        if (c.detectorFrequencyMeanBins == 0 || (c.detectorFrequencyMeanBins & 1u) == 0)
-            throw std::runtime_error("detector.frequency_mean_bins must be an odd positive integer");
-        if (c.detectorTimeMeanPsds == 0)
-            throw std::runtime_error("detector.time_mean_psds must be >= 1");
-        if (!(c.detectorPeakThresholdDb > 0.0))
-            throw std::runtime_error("detector.peak_threshold_db must be > 0");
-        if (c.detectorMinPeakSeparationHz < 0.0)
-            throw std::runtime_error("detector.min_peak_separation_hz must be >= 0");
-        if (c.detectorMaxPeaksPerPsd == 0)
-            throw std::runtime_error("detector.max_peaks_per_psd must be >= 1");
         if (c.detectorDiagnosticIntervalSeconds < 0.0)
             throw std::runtime_error("detector.diagnostic_interval_s must be >= 0");
         if (c.detectorPreContextSeconds < 0.0 || c.detectorPostContextSeconds < 0.0)
@@ -2687,11 +2739,23 @@ Config parseArgs(const int argc, char **argv)
             throw std::runtime_error("detector.max_event_seconds must be >= 0");
         if (c.detectorRearmSeconds < 0.0)
             throw std::runtime_error("detector.rearm_seconds must be >= 0");
-        if (!c.detectorStationaryEnabled && !c.detectorChirpEnabled)
-            throw std::runtime_error("detector enabled but stationary and chirp tracking are both disabled");
-
         const double halfBand = c.bandwidth / 2.0;
-        auto validateRange = [&](const char *name, bool enabled, double minHz, double maxHz,
+        if (c.detectorPlugin == "peak_tracker")
+        {
+            if (c.detectorFrequencyMeanBins == 0 || (c.detectorFrequencyMeanBins & 1u) == 0)
+                throw std::runtime_error("detector.frequency_mean_bins must be an odd positive integer");
+            if (c.detectorTimeMeanPsds == 0)
+                throw std::runtime_error("detector.time_mean_psds must be >= 1");
+            if (!(c.detectorPeakThresholdDb > 0.0))
+                throw std::runtime_error("detector.peak_threshold_db must be > 0");
+            if (c.detectorMinPeakSeparationHz < 0.0)
+                throw std::runtime_error("detector.min_peak_separation_hz must be >= 0");
+            if (c.detectorMaxPeaksPerPsd == 0)
+                throw std::runtime_error("detector.max_peaks_per_psd must be >= 1");
+            if (!c.detectorStationaryEnabled && !c.detectorChirpEnabled)
+                throw std::runtime_error("detector enabled but stationary and chirp tracking are both disabled");
+
+            auto validateRange = [&](const char *name, bool enabled, double minHz, double maxHz,
                                  double maxDf, double activationTime, double activationFraction,
                                  double lostSeconds) {
             if (!enabled) return;
@@ -2702,21 +2766,52 @@ Config parseArgs(const int argc, char **argv)
                 lostSeconds < 0.0)
                 throw std::runtime_error(std::string("invalid ") + name + " tracking parameters");
         };
-        validateRange("detector.stationary", c.detectorStationaryEnabled,
+            validateRange("detector.stationary", c.detectorStationaryEnabled,
                       c.detectorStationaryMinHz, c.detectorStationaryMaxHz,
                       c.detectorStationaryMaxDfHz, c.detectorStationaryActivationSeconds,
                       c.detectorStationaryActivationFraction, c.detectorStationaryLostSeconds);
-        if (c.detectorStationaryEnabled && !(c.detectorStationaryMaxDriftHzS >= 0.0))
-            throw std::runtime_error("detector.stationary.max_drift_hz_s must be >= 0");
+            if (c.detectorStationaryEnabled && !(c.detectorStationaryMaxDriftHzS >= 0.0))
+                throw std::runtime_error("detector.stationary.max_drift_hz_s must be >= 0");
 
-        validateRange("detector.chirp", c.detectorChirpEnabled,
+            validateRange("detector.chirp", c.detectorChirpEnabled,
                       c.detectorChirpMinHz, c.detectorChirpMaxHz,
                       c.detectorChirpMaxDfHz, c.detectorChirpActivationSeconds,
                       c.detectorChirpActivationFraction, c.detectorChirpLostSeconds);
-        if (c.detectorChirpEnabled &&
-            !(c.detectorChirpMinDriftHzS >= 0.0 &&
-              c.detectorChirpMinDriftHzS < c.detectorChirpMaxDriftHzS))
-            throw std::runtime_error("detector.chirp drift limits must satisfy 0 <= min < max");
+            if (c.detectorChirpEnabled &&
+                !(c.detectorChirpMinDriftHzS >= 0.0 &&
+                  c.detectorChirpMinDriftHzS < c.detectorChirpMaxDriftHzS))
+                throw std::runtime_error("detector.chirp drift limits must satisfy 0 <= min < max");
+        }
+        else if (c.detectorPlugin == "echoes_automatic")
+        {
+            const bool modeValid = c.detectorEchoesThresholdMode == "absolute" ||
+                c.detectorEchoesThresholdMode == "differential" ||
+                c.detectorEchoesThresholdMode == "automatic";
+            if (!modeValid)
+                throw std::runtime_error("detector.echoes.threshold_mode must be absolute, differential, or automatic");
+            if (c.detectorEchoesDetectionWidthHz < 0.0 ||
+                (c.detectorEchoesDetectionWidthHz > 0.0 &&
+                 (c.detectorEchoesDetectionCenterHz - 0.5 * c.detectorEchoesDetectionWidthHz < -halfBand ||
+                  c.detectorEchoesDetectionCenterHz + 0.5 * c.detectorEchoesDetectionWidthHz > halfBand)))
+                throw std::runtime_error("detector.echoes detection interval must lie inside +/-bandwidth/2");
+            if (!(c.detectorEchoesAbsoluteLowerDbHz < c.detectorEchoesAbsoluteUpperDbHz) ||
+                !(c.detectorEchoesDifferentialLowerDb < c.detectorEchoesDifferentialUpperDb) ||
+                c.detectorEchoesAutomaticLowerOffsetDb < 0.0 ||
+                !(c.detectorEchoesAutomaticUpperDeltaDb > 0.0) ||
+                c.detectorEchoesAutomaticWarmupSeconds < 0.0 ||
+                !(c.detectorEchoesAutomaticBaselineTauSeconds > 0.0) ||
+                !(c.detectorEchoesAutomaticStddevWindowSeconds > 0.0) ||
+                !(c.detectorEchoesAutomaticEndStddevFactor > 0.0) ||
+                c.detectorEchoesDelayBeforeTriggerSeconds < 0.0 ||
+                c.detectorEchoesJoinEventsSeconds < 0.0)
+                throw std::runtime_error("invalid detector.echoes threshold or timing parameters");
+            if (c.detectorEchoesDelayBeforeTriggerSeconds > c.detectorPreContextSeconds)
+                throw std::runtime_error("detector.pre_context_s must be >= detector.echoes.delay_before_trigger_s");
+        }
+        else
+        {
+            throw std::runtime_error("unknown detector plugin: " + c.detectorPlugin);
+        }
 
         if (c.detectorCompression < 0 || c.detectorCompression > 9)
             throw std::runtime_error("output.hdf5_compression must be in [0,9]");
@@ -2869,16 +2964,33 @@ int main(int argc, char **argv)
         {
             LOG_INFO_STREAM("detector=ON plugin=" << cfg.detectorPlugin
                             << " threads=" << cfg.detectorThreads
-                            << " freq_mean_bins=" << cfg.detectorFrequencyMeanBins
-                            << " time_mean_psds=" << cfg.detectorTimeMeanPsds
-                            << " peak_threshold=" << cfg.detectorPeakThresholdDb
-                            << " dB-above-median"
-                            << " min_peak_separation=" << cfg.detectorMinPeakSeparationHz
-                            << " Hz max_peaks=" << cfg.detectorMaxPeaksPerPsd
                             << " pre_context=" << cfg.detectorPreContextSeconds
                             << " s post_context=" << cfg.detectorPostContextSeconds
                             << " s max_event=" << cfg.detectorMaxEventSeconds
                             << " s rearm=" << cfg.detectorRearmSeconds << " s");
+            if (cfg.detectorPlugin == "peak_tracker")
+            {
+                LOG_INFO_STREAM("peak_tracker freq_mean_bins="
+                                << cfg.detectorFrequencyMeanBins
+                                << " time_mean_psds=" << cfg.detectorTimeMeanPsds
+                                << " peak_threshold=" << cfg.detectorPeakThresholdDb
+                                << " dB-above-median min_peak_separation="
+                                << cfg.detectorMinPeakSeparationHz
+                                << " Hz max_peaks=" << cfg.detectorMaxPeaksPerPsd);
+            }
+            else if (cfg.detectorPlugin == "echoes_automatic")
+            {
+                LOG_INFO_STREAM("echoes_automatic threshold_mode="
+                                << cfg.detectorEchoesThresholdMode
+                                << " detection_center="
+                                << cfg.detectorEchoesDetectionCenterHz
+                                << " Hz detection_width="
+                                << cfg.detectorEchoesDetectionWidthHz
+                                << " Hz delay="
+                                << cfg.detectorEchoesDelayBeforeTriggerSeconds
+                                << " s join="
+                                << cfg.detectorEchoesJoinEventsSeconds << " s");
+            }
         }
         else
             spdlog::info("detector=OFF");

@@ -1079,10 +1079,11 @@ max_drift_hz_s = 150000
 
 Selects the compile-time registered detector implementation.
 
-Phase 1 currently provides:
+Available plugins are:
 
 ```toml
 plugin = "peak_tracker"
+plugin = "echoes_automatic"
 ```
 
 Changing this parameter is the application-level detector replacement
@@ -1104,6 +1105,8 @@ plugins can parallelize internally without changing Meteoris event/recording
 code.
 
 See [`DETECTOR_PLUGIN_API.md`](DETECTOR_PLUGIN_API.md).
+See [`ECHOES_AUTOMATIC_DETECTOR.md`](ECHOES_AUTOMATIC_DETECTOR.md) for the
+Echoes-style threshold detector and its `[detector.echoes]` parameters.
 
 ## `enabled`
 

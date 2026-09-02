@@ -49,7 +49,7 @@ Detector Info
 The detector API version is currently:
 
 ```text
-DETECTOR_API_VERSION = 1
+DETECTOR_API_VERSION = 2
 ```
 
 ## Frame ownership
@@ -60,7 +60,7 @@ No PSD copy is made at the interface.
 The memory is valid only during:
 
 ```cpp
-detector->process(frame)
+detector->process(frame, options)
 ```
 
 A detector must not retain the pointer after `process()` returns.
@@ -70,10 +70,17 @@ A detector must not retain the pointer after `process()` returns.
 Phase 1 uses:
 
 ```cpp
-DetectorResult process(const DetectorFrame &frame)
+DetectorResult process(const DetectorFrame &frame,
+                       const ProcessOptions &options)
 ```
 
 The call is synchronous.
+
+`ProcessOptions.mode` selects either `ProcessingMode::Full` or
+`ProcessingMode::PreprocessOnly`. Meteoris uses `PreprocessOnly` during rearm
+and forced cutoff: detector preprocessing and smoothing history advance, while
+association and tracking are suppressed. This lets the first post-rearm frame
+use current smoothing history without inheriting an earlier track.
 
 A future detector may internally use worker threads/SIMD, but all work for the
 frame must finish before `process()` returns.
@@ -117,7 +124,10 @@ Meteoris starts/stops recording from transitions in detector `Active` state.
 
 ## Structured diagnostics
 
-Plugins return borrowed structured diagnostic views.
+Plugins return borrowed structured diagnostic views only when the caller sets
+`ProcessOptions.collectDebug=true`. Meteoris requests them at
+`detector.diagnostic_interval_s`; ordinary frames return the lightweight
+decision and peak counters without constructing metric or object vectors.
 
 Scalar values are exported as `DetectorMetric`:
 
@@ -191,6 +201,7 @@ Currently:
 
 ```text
 peak_tracker
+echoes_automatic
 ```
 
 is the only registered implementation.

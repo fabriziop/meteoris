@@ -8,7 +8,7 @@
 namespace meteoris {
 namespace detector {
 
-constexpr uint32_t DETECTOR_API_VERSION = 1;
+constexpr uint32_t DETECTOR_API_VERSION = 2;
 
 enum class State
 {
@@ -83,7 +83,32 @@ struct Result
     // Common recorder metric retained for HDF5 meteoris-v0 compatibility.
     float frameMaxDbHz = -300.0f;
 
+    // Lightweight per-frame peak statistics used by the recorder for
+    // cumulative counters and rate-limited warnings. Unlike DebugView, these
+    // are always populated and require no diagnostic vector construction.
+    uint64_t rawCandidates = 0;
+    uint64_t closeSuppressed = 0;
+    uint64_t droppedByLimit = 0;
+    uint64_t retainedPeaks = 0;
+
     DebugView debug;
+};
+
+enum class ProcessingMode
+{
+    Full,
+    PreprocessOnly
+};
+
+struct ProcessOptions
+{
+    // PreprocessOnly advances detector preprocessing/history but suppresses
+    // association and tracking. It is used while the recorder is rearming.
+    ProcessingMode mode = ProcessingMode::Full;
+
+    // Building named metrics and per-track objects is optional because it is
+    // appreciably more expensive than returning the detector decision.
+    bool collectDebug = false;
 };
 
 struct Environment
@@ -119,8 +144,11 @@ public:
     // buffers so reset remains inexpensive.
     virtual void reset() = 0;
 
-    // Synchronous, zero-copy detector entry point.
-    virtual Result process(const Frame &frame) = 0;
+    // Synchronous, zero-copy detector entry point. Processing mode and
+    // structured-diagnostic collection are controlled independently.
+    virtual Result process(
+        const Frame &frame,
+        const ProcessOptions &options = ProcessOptions()) = 0;
 };
 
 // Current built-in plugin configuration. Phase 1 keeps the existing TOML
@@ -154,11 +182,40 @@ struct PeakTrackerConfig
     double chirpMaxDriftHzS = 150000.0;
 };
 
+// Echoes-style scan-power detector. Absolute levels use Meteoris PSD-density
+// dB/Hz; differential and automatic thresholds are dB differences.
+struct EchoesAutomaticConfig
+{
+    std::string thresholdMode = "automatic"; // absolute|differential|automatic
+
+    // A non-positive width selects the complete PSD band.
+    double detectionCenterHz = 0.0;
+    double detectionWidthHz = 0.0;
+
+    double absoluteLowerDbHz = -90.0;
+    double absoluteUpperDbHz = -85.0;
+    double differentialLowerDb = 4.0;
+    double differentialUpperDb = 7.0;
+
+    // Automatic lower = idle mean(S-N) + lowerOffset.
+    // Automatic upper = lower + upperDelta.
+    double automaticLowerOffsetDb = 4.0;
+    double automaticUpperDeltaDb = 3.0;
+    double automaticWarmupSeconds = 5.0;
+    double automaticBaselineTimeConstantSeconds = 30.0;
+    double automaticStddevWindowSeconds = 1.0;
+    double automaticEndStddevFactor = 2.0;
+
+    double delayBeforeTriggerSeconds = 0.0;
+    double joinEventsSeconds = 1.0;
+};
+
 struct Selection
 {
     std::string plugin = "peak_tracker";
     unsigned threads = 1;
     PeakTrackerConfig peakTracker;
+    EchoesAutomaticConfig echoesAutomatic;
 };
 
 std::unique_ptr<IDetector> create(const Selection &selection,

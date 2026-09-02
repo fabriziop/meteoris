@@ -25,6 +25,7 @@ find_package(spdlog CONFIG REQUIRED)
 add_executable(meteoris
     src/meteoris.cpp
     src/detector/detector_registry.cpp
+    src/detector/echoes_automatic_detector.cpp
     src/detector/peak_tracker_detector.cpp
 )
 

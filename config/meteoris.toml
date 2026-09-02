@@ -90,7 +90,7 @@ segment_count = 0
 
 [detector]
 # Compile-time registered detector implementation selected at runtime.
-# Phase 1 currently provides: "peak_tracker".
+# Available plugins: "peak_tracker", "echoes_automatic".
 plugin = "peak_tracker"
 # 0 lets a future plugin choose automatically. The current peak_tracker is
 # synchronous/serial but the interface already carries this resource budget.
@@ -153,6 +153,40 @@ lost_s = 0.08
 # Average drift range used to classify a generic tentative track as a chirp.
 min_drift_hz_s = 3000
 max_drift_hz_s = 150000
+
+[detector.echoes]
+# Used when detector.plugin = "echoes_automatic".
+# Modes: "absolute", "differential", or "automatic".
+threshold_mode = "automatic"
+
+# Detection interval in PSD frequency offsets. Width <= 0 selects the full band.
+detection_center_hz = 0
+detection_width_hz = 0
+
+# Absolute mode thresholds in Meteoris PSD-density dB/Hz.
+absolute_lower_db_hz = -90
+absolute_upper_db_hz = -85
+
+# Differential mode thresholds for S-N in dB.
+differential_lower_db = 4
+differential_upper_db = 7
+
+# Automatic lower = idle mean(S-N) + lower offset.
+# Automatic upper = lower + upper delta. Thresholds freeze during an event.
+automatic_lower_offset_db = 4
+automatic_upper_delta_db = 3
+automatic_warmup_s = 5
+automatic_baseline_time_constant_s = 30
+automatic_stddev_window_s = 1
+automatic_end_stddev_factor = 2
+
+# Delay detector activation after an upper crossing. pre_context_s must be at
+# least this long so the initial peak is retained in the HDF5 event.
+delay_before_trigger_s = 0
+
+# Keep an event active until it has remained below its end conditions for this
+# duration, joining briefly interrupted illumination into one event.
+join_events_closer_than_s = 1
 
 [output]
 # One HDF5 file is created/appended per UTC day.

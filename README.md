@@ -32,7 +32,8 @@ probably would not exist.
   * Fully configurable through a file or command-line options.
   * Continuous **10 Msps** input.
   * Final selectable **100 kHz observation band**.
-  * Configurable meteor signal detector.
+  * Pluggable meteor signal detectors, including peak/track and
+    Echoes-style automatic threshold detection.
   * Efficient HDF5 storage format for meteor-event data.
   * Event-list display with details for each event.
   * Event waterfall display with time/frequency axes and signal
@@ -133,7 +134,11 @@ configuration provides suitable defaults for the other DSP parameters.
 
 ### The Detector Section Parameters
 
-Meteoris now detects **spectral peaks and their motion through time**.
+Meteoris provides compile-time detector plugins selected with
+`detector.plugin`.
+
+The default `peak_tracker` detector detects **spectral peaks and their motion
+through time**.
 
 Each PSD is first averaged in linear power across a small centered frequency
 window and then across a short causal time window. Local maxima are extracted
@@ -160,6 +165,7 @@ A useful starting configuration is:
 
 ```toml
 [detector]
+plugin = "peak_tracker"
 frequency_mean_bins = 5
 time_mean_psds = 3
 peak_threshold_db = 5.0
@@ -185,8 +191,42 @@ min_drift_hz_s = 3000
 max_drift_hz_s = 150000
 ```
 
-The detailed algorithm and all tuning parameters are documented in
-[`doc/DETECTOR.md`](doc/DETECTOR.md) and
+The `echoes_automatic` detector is also available. It adapts the automatic
+capture logic used by Echoes to Meteoris's headless PSD recorder. Each PSD is
+scanned inside a configurable frequency interval to measure:
+
+- **S**: maximum PSD density in dB/Hz;
+- **N**: mean PSD density in dB/Hz;
+- **S-N**: peak excess above the mean noise level.
+
+It can trigger with absolute thresholds on S, differential thresholds on S-N,
+or automatic thresholds learned from the idle S-N baseline. It also supports a
+delayed trigger and a join interval for merging short interruptions into one
+event. Select it with:
+
+```toml
+[detector]
+plugin = "echoes_automatic"
+pre_context_s = 0.5
+post_context_s = 1.0
+
+[detector.echoes]
+threshold_mode = "automatic"
+detection_center_hz = 0
+detection_width_hz = 0
+automatic_lower_offset_db = 4
+automatic_upper_delta_db = 3
+automatic_warmup_s = 5
+automatic_baseline_time_constant_s = 30
+automatic_stddev_window_s = 1
+automatic_end_stddev_factor = 2
+delay_before_trigger_s = 0
+join_events_closer_than_s = 1
+```
+
+The detailed detector algorithms and all tuning parameters are documented in
+[`doc/DETECTOR.md`](doc/DETECTOR.md),
+[`doc/ECHOES_AUTOMATIC_DETECTOR.md`](doc/ECHOES_AUTOMATIC_DETECTOR.md), and
 [`doc/CONFIG_FILE_REFERENCE.md`](doc/CONFIG_FILE_REFERENCE.md).
 
 ### The Output Section Parameters
@@ -352,6 +392,8 @@ representing a meteor undergoing strong deceleration.
 Note: the detector algorithm is still under development and may require
 further tuning to reduce false triggers caused by noise.
 
+[Echoes-style Automatic Detector](./doc/ECHOES_AUTOMATIC_DETECTOR.md)
+
 [DSP Pipeline](./doc/DSP_PIPELINE.md)
 
 [HDF5 Recording Format](./doc/RECORDING_FORMAT.md)
@@ -418,7 +460,7 @@ Other negative SoapySDR stream errors remain fatal.
 ### Detector plugin architecture
 
 Detector algorithms are now separated from `meteoris.cpp` behind a versioned
-synchronous `IDetector` interface. The current detector is selected with:
+synchronous `IDetector` interface. The detector is selected with:
 
 ```toml
 [detector]
@@ -426,9 +468,10 @@ plugin = "peak_tracker"
 threads = 1
 ```
 
-The implementation lives in `src/detector/peak_tracker_detector.cpp`.
-Structured metrics and track objects cross the interface for logging and
-future HDF5/plot/replay tools. See
+Available detector plugins are `peak_tracker` and `echoes_automatic`. Their
+implementations live in `src/detector/peak_tracker_detector.cpp` and
+`src/detector/echoes_automatic_detector.cpp`. Structured metrics and detector
+objects cross the interface for logging and future HDF5/plot/replay tools. See
 [`doc/DETECTOR_PLUGIN_API.md`](doc/DETECTOR_PLUGIN_API.md).
 
 

@@ -244,10 +244,12 @@ where `YYYYMMDD` is the year, month, and day of the file to display.
 The Meteoris viewer accepts the following keys for interactive navigation
 through recorded events:
 
-- `Space`: next event
-- digits then `Space`: jump to that event
+- `Space`/`Enter`: next event
+- digits then `Space`/`Enter`: jump to that event
 - `Backspace/Delete`: edit jump number
 - `Esc`: clear jump number
+- `z`/`x`/`c`: skip ahead by 10/20/50 events
+- `r`: refresh a live SWMR file
 - `q`: quit
 - close the window: quit
 

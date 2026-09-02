@@ -3,7 +3,7 @@
 [color_scale]
 # Initial waterfall color limits, in PSD density dB/Hz.
 # CLI --db-min / --db-max override these values.
-db_min = -80.0
+db_min = -96.0
 db_max = -40.0
 
 # Allowed range of the two interactive color-scale sliders.

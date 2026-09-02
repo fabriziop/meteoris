@@ -16,9 +16,11 @@ The program:
   - reads active Meteoris HDF5 files through HDF5 SWMR mode;
   - reports the number and properties of detected events;
   - displays one selected event at a time as a time-frequency waterfall;
-  - advances to the next event with SPACE;
-  - jumps to a typed event number when SPACE is pressed;
-  - refreshes a live SWMR file with the R key;
+    - advances to the next event with SPACE/ENTER;
+    - jumps to a typed event number when SPACE/ENTER is pressed;
+    - refreshes a live SWMR file with the R key;
+    - skips ahead by 10/20/50 events with Z/X/C;
+    - terminate the interactive browser with Q or by closing the window;
   - provides interactive PSD color-scale minimum/maximum sliders;
   - provides show/hide controls for the X/Y grid and trigger markers;
   - marks trigger ON/OFF positions;
@@ -563,13 +565,14 @@ def plot_event(
     fig._meteoris_widgets = (s_min, s_max, b_trigger, b_grid)
 
     # Keyboard navigation:
-    #   SPACE          -> next event
-    #   digits + SPACE -> jump to that file-local event number
+    #   SPACE/ENTER          -> next event
+    #   digits + SPACE/ENTER -> jump to that file-local event number
+    #   Z / X / C            -> skip ahead by 10 / 20 / 50 events
     #   R              -> refresh a live SWMR file
     #   Q              -> quit interactive browsing
     # Closing the window normally also stops interactive browsing.
     navigation = {
-        "advance": False,
+        "advance_by": None,
         "jump_to": None,
         "digits": "",
         "refresh": False,
@@ -607,6 +610,24 @@ def plot_event(
                 pass
             return
 
+        if key.lower() == "z":
+            navigation["advance_by"] = 10
+            navigation["digits"] = ""
+            plt.close(fig)
+            return
+
+        if key.lower() == "x":
+            navigation["advance_by"] = 20
+            navigation["digits"] = ""
+            plt.close(fig)
+            return
+
+        if key.lower() == "c":
+            navigation["advance_by"] = 50
+            navigation["digits"] = ""
+            plt.close(fig)
+            return
+
         if key.lower() == "q":
             navigation["quit"] = True
             navigation["digits"] = ""
@@ -619,11 +640,11 @@ def plot_event(
             plt.close(fig)
             return
 
-        if key == " " or key == "space":
+        if key in (" ", "space", "enter", "return"):
             if navigation["digits"]:
                 navigation["jump_to"] = int(navigation["digits"])
             else:
-                navigation["advance"] = True
+                navigation["advance_by"] = 1
             plt.close(fig)
 
     fig.canvas.mpl_connect("key_press_event", on_key)
@@ -731,8 +752,9 @@ def main(argv: Iterable[str] | None = None) -> int:
                     plt.close(fig)
             else:
                 print(
-                    "Press SPACE for next event. Type an event number then SPACE to jump; "
-                    "R refreshes a live SWMR file; Q quits; Backspace edits, Esc clears. "
+                    "Press SPACE or ENTER for next event. Type an event number then SPACE/ENTER to jump; "
+                    "Z/X/C skip by 10/20/50 events; R refreshes a live SWMR file; "
+                    "Q quits; Backspace edits, Esc clears. "
                     "Close the window to stop."
                 )
                 pos = 0
@@ -786,8 +808,9 @@ def main(argv: Iterable[str] | None = None) -> int:
                         )
                         continue
 
-                    if navigation.get("advance"):
-                        pos += 1
+                    advance_by = navigation.get("advance_by")
+                    if advance_by is not None:
+                        pos += int(advance_by)
                         continue
 
                     break

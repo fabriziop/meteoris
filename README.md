@@ -229,6 +229,10 @@ Recording can also be continuous, in which case detector triggers are ignored.
 This mode is useful for testing and debugging. See
 [Recording Modes](#recording-modes) below.
 
+If meteoris fails to open an existing output file after an ungracefull termination, like program kill/crash or system shutdown/crash, there exists a
+set of specific tools for output file recovering. See all instuctions in
+[Recover HDF5 Output Files](./doc/RECOVER_HDF5.md). 
+
 
 # Display Recorded Data
 
@@ -351,6 +355,8 @@ further tuning to reduce false triggers caused by noise.
 [DSP Pipeline](./doc/DSP_PIPELINE.md)
 
 [HDF5 Recording Format](./doc/RECORDING_FORMAT.md)
+
+[Recover HDF5 Output Files](./doc/RECOVER_HDF5.md)
 
 ### Notes
 

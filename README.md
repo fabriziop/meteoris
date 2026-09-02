@@ -268,6 +268,10 @@ ionized trail of a meteor.
 
 ![](doc/meteoris_event_20260830115909.png)
 
+Example of meteor scatter with a complex structure. Spectrogram zoomed.
+
+![](doc/meteoris_event_20260831090518_zoom.png)
+
 
 # Simulator
 

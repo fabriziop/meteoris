@@ -43,7 +43,6 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
-#include <deque>
 #include <functional>
 #include <ctime>
 #include <cerrno>
@@ -79,7 +78,7 @@
 
 namespace
 {
-constexpr const char *METEORIS_VERSION = "0.1.0";
+constexpr const char *METEORIS_VERSION = "0.2.0";
 constexpr const char *METEORIS_AUTHOR = "Fabrizio Pollastri <mxgbot@gmail.com>";
 constexpr const char *METEORIS_HDF5_FORMAT = "meteoris v0";
 constexpr const char *METEORIS_HDF5_AUTHOR = "Fabrizio Pollastri";
@@ -800,11 +799,19 @@ public:
         });
         for (const size_t k : _bandBins) _frequencies.push_back(binFrequency(k));
         _psdScale = 1.0 / (_windowPower * _fs);
-        _frame.powerDensity.resize(_bandBins.size());
+        setFrameRingCapacity(1);
     }
 
     void setStartTimestampNs(const uint64_t ns) { _startTimestampNs = ns; }
     void setCurrentGainDb(const double gainDb) { _currentGainDb = static_cast<float>(gainDb); }
+    void setFrameRingCapacity(const size_t capacity)
+    {
+        const size_t n = std::max<size_t>(1, capacity);
+        _frameRing.resize(n);
+        for (PsdFrame &frame : _frameRing)
+            frame.powerDensity.resize(_bandBins.size());
+        if (_frameWrite >= _frameRing.size()) _frameWrite = 0;
+    }
     void setFrameCallback(std::function<void(const PsdFrame &)> cb) { _callback = std::move(cb); }
     const std::vector<double> &frequencies() const { return _frequencies; }
 
@@ -874,14 +881,17 @@ private:
         for (size_t i = 0; i < _nfft; ++i) _fft[i] = oldest[i] * _window[i];
         _fftPlan.execute(_fft);
 
-        _frame.frameIndex = _frames;
-        _frame.centerSampleIndex = _samples - _nfft + (_nfft - 1) / 2;
+        PsdFrame &frame = _frameRing[_frameWrite];
+        if (++_frameWrite == _frameRing.size()) _frameWrite = 0;
+
+        frame.frameIndex = _frames;
+        frame.centerSampleIndex = _samples - _nfft + (_nfft - 1) / 2;
         if (_startTimestampNs != 0)
         {
-            const double dtNs = 1e9 * double(_frame.centerSampleIndex) / _fs;
-            _frame.timestampNs = _startTimestampNs + static_cast<uint64_t>(std::llround(dtNs));
+            const double dtNs = 1e9 * double(frame.centerSampleIndex) / _fs;
+            frame.timestampNs = _startTimestampNs + static_cast<uint64_t>(std::llround(dtNs));
         }
-        _frame.gainDb = _currentGainDb;
+        frame.gainDb = _currentGainDb;
         for (size_t j = 0; j < _bandBins.size(); ++j)
         {
             const size_t k = _bandBins[j];
@@ -889,10 +899,10 @@ private:
             const float im = _fft[k].imag();
             const double raw = double(re) * double(re) + double(im) * double(im);
             _powerSum[k] += raw;
-            _frame.powerDensity[j] = static_cast<float>(raw * _psdScale);
+            frame.powerDensity[j] = static_cast<float>(raw * _psdScale);
         }
         ++_frames;
-        if (_callback) _callback(_frame);
+        if (_callback) _callback(frame);
     }
 
     double _fs;
@@ -915,7 +925,8 @@ private:
     uint64_t _startTimestampNs = 0;
     float _currentGainDb = 0.0f;
     double _psdScale = 0.0;
-    PsdFrame _frame;
+    std::vector<PsdFrame> _frameRing;
+    size_t _frameWrite = 0;
 };
 
 class IntegratedDspChain
@@ -1698,6 +1709,9 @@ public:
             _cfg.detectorPreContextSeconds / _framePeriodSeconds));
         _postContextFrames = static_cast<size_t>(std::ceil(
             _cfg.detectorPostContextSeconds / _framePeriodSeconds));
+        _pre.resize(_preContextFrames);
+        for (BufferedFrame &b : _pre)
+            b.frame.powerDensity.resize(_frequencies.size());
     }
 
     void consume(const PsdFrame &frame)
@@ -1715,12 +1729,12 @@ public:
                 options.mode =
                     meteoris::detector::ProcessingMode::PreprocessOnly;
                 (void)_detector->process(makeDetectorFrame(frame), options);
-                _pre.clear();
+                clearPre();
                 return;
             }
             _rearmUntilNs = 0;
             _detector->reset();
-            _pre.clear();
+            clearPre();
         }
 
         if (_cfg.detectorMaxEventSeconds > 0.0 && _eventStartNs != 0 &&
@@ -1736,7 +1750,7 @@ public:
                 (void)_detector->process(makeDetectorFrame(frame), options);
                 _active = false;
                 _postRemaining = 0;
-                _pre.clear();
+                clearPre();
                 ++_forcedCutoffs;
                 const uint64_t rearmNs = static_cast<uint64_t>(
                     std::llround(_cfg.detectorRearmSeconds * 1e9));
@@ -1812,12 +1826,14 @@ public:
         {
             ++_eventId;
             ++_triggerOns;
-            for (size_t i = 0; i < _pre.size(); ++i)
+            for (size_t i = 0; i < _preCount; ++i)
             {
-                _writer.append(_pre[i].frame, _eventId, 0, _pre[i].maxDb);
+                const size_t preIndex = oldestPreIndex(i);
+                _writer.append(_pre[preIndex].frame, _eventId, 0,
+                               _pre[preIndex].maxDb);
                 ++_savedFrames;
             }
-            _pre.clear();
+            clearPre();
             _writer.append(frame, _eventId, 1, metricDbHz);
             ++_savedFrames;
             _active = true;
@@ -1890,11 +1906,33 @@ private:
     void remember(const PsdFrame &frame, const float maxDb)
     {
         if (_preContextFrames == 0) return;
-        BufferedFrame b;
-        b.frame = frame;
+        BufferedFrame &b = _pre[_preWrite];
+        copyFrame(b.frame, frame);
         b.maxDb = maxDb;
-        _pre.push_back(b);
-        while (_pre.size() > _preContextFrames) _pre.pop_front();
+        if (++_preWrite == _pre.size()) _preWrite = 0;
+        if (_preCount < _pre.size()) ++_preCount;
+    }
+
+    static void copyFrame(PsdFrame &dst, const PsdFrame &src)
+    {
+        dst.frameIndex = src.frameIndex;
+        dst.centerSampleIndex = src.centerSampleIndex;
+        dst.timestampNs = src.timestampNs;
+        dst.gainDb = src.gainDb;
+        dst.powerDensity.resize(src.powerDensity.size());
+        std::copy(src.powerDensity.begin(), src.powerDensity.end(),
+                  dst.powerDensity.begin());
+    }
+
+    size_t oldestPreIndex(const size_t offset) const
+    {
+        return (_preWrite + _pre.size() - _preCount + offset) % _pre.size();
+    }
+
+    void clearPre()
+    {
+        _preWrite = 0;
+        _preCount = 0;
     }
 
     void consumeDebugCounters(const meteoris::detector::Result &d)
@@ -1998,8 +2036,10 @@ private:
     double _framePeriodSeconds = 0.0;
     std::unique_ptr<meteoris::detector::IDetector> _detector;
     DailyHdf5Writer _writer;
-    std::deque<BufferedFrame> _pre;
+    std::vector<BufferedFrame> _pre;
     size_t _preContextFrames = 0;
+    size_t _preWrite = 0;
+    size_t _preCount = 0;
     size_t _postContextFrames = 0;
     bool _active = false;
     size_t _postRemaining = 0;
@@ -2870,6 +2910,14 @@ int main(int argc, char **argv)
         const SoapySDR::Kwargs streamArgs = {{"buffers", std::to_string(cfg.streamBuffers)}};
         rxStream = dev->setupStream(SOAPY_SDR_RX, SOAPY_SDR_CS8, channels, streamArgs);
         const size_t streamMtu = dev->getStreamMTU(rxStream);
+        const size_t decimation = cfg.decim1 * cfg.decim2;
+        const size_t maxFinalSamplesPerRead =
+            (streamMtu + decimation - 1) / decimation + 2;
+        const size_t maxPsdFramesPerRead =
+            (maxFinalSamplesPerRead + cfg.nfft - 1) / (cfg.nfft / 2) + 2;
+        const size_t psdFrameRingCapacity =
+            std::max<size_t>(16, maxPsdFramesPerRead);
+        dsp.psd().setFrameRingCapacity(psdFrameRingCapacity);
         size_t directBuffers = 0;
         bool useDirect = cfg.direct;
         if (useDirect)
@@ -3033,21 +3081,22 @@ int main(int argc, char **argv)
         md.decim2 = cfg.decim2;
         md.nfft = cfg.nfft;
 
+        std::vector<const PsdFrame *> pendingPsdFrames;
+        pendingPsdFrames.reserve(psdFrameRingCapacity);
+        dsp.psd().setFrameCallback(
+            [&pendingPsdFrames](const PsdFrame &f) {
+                pendingPsdFrames.push_back(&f);
+            });
+
         if (cfg.recordingMode == "continuous")
         {
             continuousRecorder.reset(new ContinuousPsdRecorder(
                 cfg, dsp.psd().frequencies(), md));
-            dsp.psd().setFrameCallback(
-                [&continuousRecorder](const PsdFrame &f) {
-                    continuousRecorder->consume(f);
-                });
         }
         else
         {
             detector.reset(new PsdDetectorRecorder(
                 cfg, dsp.psd().frequencies(), md));
-            dsp.psd().setFrameCallback(
-                [&detector](const PsdFrame &f) { detector->consume(f); });
         }
 
         const int actRet = dev->activateStream(rxStream);
@@ -3171,15 +3220,28 @@ int main(int argc, char **argv)
             // Native CS8 is consumed directly from the driver's ring buffer.
             // AGC clipping count is folded into this same pass (no extra scan).
             dsp.psd().setCurrentGainDb(currentGain);
+            pendingPsdFrames.clear();
             uint64_t clippedComplex = 0;
             const size_t produced = dsp.processCs8(iq, got, cfg.agcEnabled ? &clippedComplex : nullptr, cfg.agcClipLevel);
 
-            const auto d1 = std::chrono::steady_clock::now();
             if (heldDirect) dev->releaseReadBuffer(rxStream, handle);
-
-            const double td = std::chrono::duration<double>(d1 - d0).count();
             if (cfg.agcEnabled)
                 currentGain = agc.update(clippedComplex, got, double(got) / cfg.sampleRate);
+
+            // Detector and HDF5 work can be bursty at trigger ON because the
+            // recorder writes the pre-context backlog. Keep that work out of
+            // the Soapy direct-buffer hold interval so the SDR ring can be
+            // recycled before disk I/O starts.
+            for (const PsdFrame *psdFrame : pendingPsdFrames)
+            {
+                if (continuousRecorder)
+                    continuousRecorder->consume(*psdFrame);
+                else if (detector)
+                    detector->consume(*psdFrame);
+            }
+
+            const auto d1 = std::chrono::steady_clock::now();
+            const double td = std::chrono::duration<double>(d1 - d0).count();
             dspSeconds += td;
             maxBlockDsp = std::max(maxBlockDsp, td);
             blockDspTimes.push_back(td);

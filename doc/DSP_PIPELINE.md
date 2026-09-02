@@ -1,7 +1,7 @@
 # Meteoris DSP pipeline
 
 This document describes the digital signal-processing pipeline implemented in
-`meteoris.cpp` for **Meteoris 0.1.0**. It follows the current C++ implementation
+`meteoris.cpp` for **Meteoris 0.2.0**. It follows the current C++ implementation
 from native SoapySDR `CS8` acquisition through frequency translation, FIR
 decimation, PSD calculation, and delivery of PSD frames to the detector.
 

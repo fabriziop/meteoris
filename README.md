@@ -15,7 +15,7 @@ parameters.
 
 Meteoris has currently been tested on Linux with the [HackRF One
 SDR](https://hackrf.readthedocs.io/en/latest/hackrf_one.html).
-Meteoris is currently at version 0.1.0 and should therefore be considered alpha
+Meteoris is currently at version 0.2.0 and should therefore be considered alpha
 software.
 
 ### Author's Note
@@ -399,6 +399,8 @@ further tuning to reduce false triggers caused by noise.
 [HDF5 Recording Format](./doc/RECORDING_FORMAT.md)
 
 [Recover HDF5 Output Files](./doc/RECOVER_HDF5.md)
+
+[BUG20260902: one-PSD spectrogram dropout after trigger ON](./doc/BUG20260902.md)
 
 ### Notes
 

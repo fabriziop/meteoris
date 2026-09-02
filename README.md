@@ -67,7 +67,7 @@ Set the center frequency, i.e. the SDR tuning frequency. This parameter depends
 on the transmitter used for meteor-scatter reception. Some examples of
 transmitters used for this purpose are:
 
-- GRAVES 143.050 MHz (Digion, France)
+- GRAVES 143.050 MHz (Dijon, France)
 - BRAMS   49.970 MHz (Dourbes, Belgium)
 - GB3MBA  50.408 MHz (Sutton-in-Ashfield, UK)
 
@@ -109,18 +109,19 @@ baseband and can therefore compensate for the intentional tuning offset and
 receiver frequency error.
 
 For example, to receive the GRAVES transmitter at 143.050 MHz, move the DC
-spur approximately 1 MHz away from the signal, and compensate for a receiver
-frequency error of about -1.2 kHz, the configuration can be:
+spur approximately 1 MHz up away from the signal and compensate for a receiver
+frequency error of about -1.35 kHz, the center frequency is raised by 1 MHz and the shift frequency is set to the sum of the raised quantity (+1000000) and
+the -1.35 kHz compensation (+998650 Hz). See the configuration below.
 
 ``` 
 [sdr]
 ...
-center_frequency = 142051200
+center_frequency = 144050000
 ...
 
 [dsp]
 ...
-shift_hz = -1000000
+shift_hz = +998650
 ...
 ```
 
@@ -260,7 +261,7 @@ a copy. While browsing an active SWMR file:
 - `R` refreshes all growing datasets and the event list.
 
 Example of a typical meteor-scatter event captured by Meteoris. It is an echo
-of the GRAVES transmitter (143.050 MHz, Dijon, France) from the hyperdense
+of the GRAVES transmitter (143.050 MHz, Dijon, France) from the overdense
 ionized trail of a meteor.
 
 ![](doc/meteoris_event_20260830115909.png)
@@ -340,7 +341,6 @@ representing a meteor undergoing strong deceleration.
 [Detection Algorithm](./doc/DETECTOR.md)
 Note: the detector algorithm is still under development and may require
 further tuning to reduce false triggers caused by noise.
-
 
 [DSP Pipeline](./doc/DSP_PIPELINE.md)
 

@@ -5,12 +5,12 @@
 driver = "hackrf-htime"
 sample_rate = 10000000
 # Set to 0 to leave frequency unchanged by Meteoris.
-center_frequency = 142151200
+center_frequency = 144050000
 # Initial gain. When AGC is enabled this is the starting value.
-gain = 110
+gain = 90
 
 [dsp]
-shift_hz = -1100000
+shift_hz = +998650
 decimation_stage1 = 8
 decimation_stage2 = 5
 bandwidth_hz = 100000
@@ -182,4 +182,3 @@ max_growth_mb_per_min = 100
 # Stop Meteoris when available space on the output filesystem falls below this value.
 # 0 disables the free-space safety check.
 min_free_space_gb = 2
-

@@ -17,9 +17,10 @@ The program:
   - reports the number and properties of detected events;
   - displays one selected event at a time as a time-frequency waterfall;
     - advances to the next event with SPACE/ENTER;
+    - goes back one event with SHIFT+SPACE/SHIFT+ENTER;
     - jumps to a typed event number when SPACE/ENTER is pressed;
     - refreshes a live SWMR file with the R key;
-    - skips ahead by 10/20/50 events with Z/X/C;
+    - skips by -20/-10/+10/+20 events with Z/X/C/V;
     - terminate the interactive browser with Q or by closing the window;
   - provides interactive PSD color-scale minimum/maximum sliders;
   - provides show/hide controls for the X/Y grid and trigger markers;
@@ -565,11 +566,12 @@ def plot_event(
     fig._meteoris_widgets = (s_min, s_max, b_trigger, b_grid)
 
     # Keyboard navigation:
-    #   SPACE/ENTER          -> next event
-    #   digits + SPACE/ENTER -> jump to that file-local event number
-    #   Z / X / C            -> skip ahead by 10 / 20 / 50 events
-    #   R              -> refresh a live SWMR file
-    #   Q              -> quit interactive browsing
+    #   SPACE/ENTER                -> next event
+    #   SHIFT+SPACE/SHIFT+ENTER    -> previous event
+    #   digits + SPACE/ENTER       -> jump to that file-local event number
+    #   Z / X / C / V              -> skip by -20 / -10 / +10 / +20 events
+    #   R                          -> refresh a live SWMR file
+    #   Q                          -> quit interactive browsing
     # Closing the window normally also stops interactive browsing.
     navigation = {
         "advance_by": None,
@@ -578,9 +580,67 @@ def plot_event(
         "refresh": False,
         "quit": False,
     }
+    modifier_state = {"shift_down": False}
+
+    def has_shift_modifier(event) -> bool:
+        key_l = (event.key or "").lower()
+        if key_l.startswith("shift+"):
+            return True
+        if modifier_state["shift_down"]:
+            return True
+
+        gui_event = getattr(event, "guiEvent", None)
+        if gui_event is None:
+            return False
+
+        shift_key = getattr(gui_event, "shiftKey", None)
+        if shift_key is not None:
+            return bool(shift_key)
+
+        for name in ("ShiftDown", "shiftDown"):
+            method = getattr(gui_event, name, None)
+            if callable(method):
+                try:
+                    if method():
+                        return True
+                except Exception:
+                    pass
+
+        def modifier_value(value) -> int | None:
+            if callable(value):
+                try:
+                    value = value()
+                except Exception:
+                    return None
+            if hasattr(value, "value"):
+                value = value.value
+            try:
+                return int(value)
+            except Exception:
+                return None
+
+        modifiers = modifier_value(getattr(gui_event, "modifiers", None))
+        if modifiers is not None and (modifiers & 0x02000000):
+            return True
+
+        state = modifier_value(getattr(gui_event, "state", None))
+        if state is not None and (state & 0x0001):
+            return True
+
+        state = modifier_value(getattr(gui_event, "get_state", None))
+        if state is not None and (state & 0x0001):
+            return True
+
+        return False
 
     def on_key(event):
         key = event.key or ""
+        key_l = key.lower()
+
+        if key_l in ("shift", "shift_l", "shift_r"):
+            modifier_state["shift_down"] = True
+            return
+
         if len(key) == 1 and key.isdigit():
             navigation["digits"] += key
             try:
@@ -610,33 +670,51 @@ def plot_event(
                 pass
             return
 
-        if key.lower() == "z":
+        if key_l == "z":
+            navigation["advance_by"] = -20
+            navigation["digits"] = ""
+            plt.close(fig)
+            return
+
+        if key_l == "x":
+            navigation["advance_by"] = -10
+            navigation["digits"] = ""
+            plt.close(fig)
+            return
+
+        if key_l == "c":
             navigation["advance_by"] = 10
             navigation["digits"] = ""
             plt.close(fig)
             return
 
-        if key.lower() == "x":
+        if key_l == "v":
             navigation["advance_by"] = 20
             navigation["digits"] = ""
             plt.close(fig)
             return
 
-        if key.lower() == "c":
-            navigation["advance_by"] = 50
-            navigation["digits"] = ""
-            plt.close(fig)
-            return
-
-        if key.lower() == "q":
+        if key_l == "q":
             navigation["quit"] = True
             navigation["digits"] = ""
             plt.close(fig)
             return
 
-        if key.lower() == "r":
+        if key_l == "r":
             navigation["refresh"] = True
             navigation["digits"] = ""
+            plt.close(fig)
+            return
+
+        if key_l in (
+            "shift+ ",
+            "shift+space",
+            "shift+enter",
+            "shift+return",
+        ) or (has_shift_modifier(event) and
+              key in (" ", "space", "enter", "return")):
+            navigation["digits"] = ""
+            navigation["advance_by"] = -1
             plt.close(fig)
             return
 
@@ -647,7 +725,13 @@ def plot_event(
                 navigation["advance_by"] = 1
             plt.close(fig)
 
+    def on_key_release(event):
+        key = (event.key or "").lower()
+        if key in ("shift", "shift_l", "shift_r"):
+            modifier_state["shift_down"] = False
+
     fig.canvas.mpl_connect("key_press_event", on_key)
+    fig.canvas.mpl_connect("key_release_event", on_key_release)
 
     if save_dir is not None:
         save_dir.mkdir(parents=True, exist_ok=True)
@@ -753,7 +837,8 @@ def main(argv: Iterable[str] | None = None) -> int:
             else:
                 print(
                     "Press SPACE or ENTER for next event. Type an event number then SPACE/ENTER to jump; "
-                    "Z/X/C skip by 10/20/50 events; R refreshes a live SWMR file; "
+                    "SHIFT+SPACE or SHIFT+ENTER goes back one event; "
+                    "Z/X/C/V skip by -20/-10/+10/+20 events; R refreshes a live SWMR file; "
                     "Q quits; Backspace edits, Esc clears. "
                     "Close the window to stop."
                 )
@@ -811,6 +896,8 @@ def main(argv: Iterable[str] | None = None) -> int:
                     advance_by = navigation.get("advance_by")
                     if advance_by is not None:
                         pos += int(advance_by)
+                        if pos < 0:
+                            pos = 0
                         continue
 
                     break

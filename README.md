@@ -21,9 +21,9 @@ software.
 ### Author's Note
 
 This project is completely AI-generated; the code has not been manually
-reviewed line by line. Only this README was originally handwritten. I provided
-the ideas, requirements, and some of the solutions. Without AI, this project
-probably would not exist.
+reviewed line by line. Only this README was originally handwritten. The
+authour provided the ideas, requirements, and some of the solutions.
+Without AI, this project probably would not exist.
 
 
 # Main Features
@@ -289,10 +289,11 @@ The Meteoris viewer accepts the following keys for interactive navigation
 through recorded events:
 
 - `Space`/`Enter`: next event
+- `Shift+Space`/`Shift+Enter`: previous event
 - digits then `Space`/`Enter`: jump to that event
 - `Backspace/Delete`: edit jump number
 - `Esc`: clear jump number
-- `z`/`x`/`c`: skip ahead by 10/20/50 events
+- `z`/`x`/`c`/`v`: skip by -20/-10/+10/+20 events
 - `r`: refresh a live SWMR file
 - `q`: quit
 - close the window: quit

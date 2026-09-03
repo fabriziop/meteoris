@@ -413,6 +413,10 @@ The Release build enables `-ffast-math` and `-fno-math-errno` for the DSP
 executable. `-march=native` is enabled by default and should be disabled for
 cross-machine binary distribution.
 
+When available, the optional FFTW backend is recommended for FFT processing.
+In local Meteoris benchmarks it gives about a 3x speedup compared with the
+embedded radix-2 FFT.
+
 ### Tentative-track diagnostics
 
 When no track is active but tentative candidates exist, the `DET` diagnostic

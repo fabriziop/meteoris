@@ -66,6 +66,7 @@
 #include <spdlog/sinks/base_sink.h>
 
 #include "detector/detector.hpp"
+#include "fft/fft_backend.hpp"
 
 #if defined(__AVX2__)
 #include <immintrin.h>
@@ -707,64 +708,6 @@ private:
     mutable std::vector<std::complex<float>> *_jobOut = nullptr;
 };
 
-class Radix2Fft
-{
-public:
-    explicit Radix2Fft(const size_t n) : _n(n), _bitrev(n), _twiddle(n / 2)
-    {
-        if (_n == 0 || (_n & (_n - 1)) != 0)
-            throw std::runtime_error("FFT length must be a power of two");
-
-        unsigned bits = 0;
-        for (size_t t = _n; t > 1; t >>= 1) ++bits;
-        for (size_t i = 0; i < _n; ++i)
-        {
-            size_t x = i, r = 0;
-            for (unsigned b = 0; b < bits; ++b)
-            {
-                r = (r << 1) | (x & 1u);
-                x >>= 1;
-            }
-            _bitrev[i] = r;
-        }
-        for (size_t k = 0; k < _n / 2; ++k)
-        {
-            const double a = -2.0 * PI * double(k) / double(_n);
-            _twiddle[k] = {static_cast<float>(std::cos(a)), static_cast<float>(std::sin(a))};
-        }
-    }
-
-    void execute(std::vector<std::complex<float>> &a) const
-    {
-        for (size_t i = 0; i < _n; ++i)
-        {
-            const size_t j = _bitrev[i];
-            if (i < j) std::swap(a[i], a[j]);
-        }
-
-        for (size_t len = 2; len <= _n; len <<= 1)
-        {
-            const size_t half = len >> 1;
-            const size_t step = _n / len;
-            for (size_t i = 0; i < _n; i += len)
-            {
-                for (size_t j = 0; j < half; ++j)
-                {
-                    const auto u = a[i + j];
-                    const auto v = a[i + j + half] * _twiddle[j * step];
-                    a[i + j] = u + v;
-                    a[i + j + half] = u - v;
-                }
-            }
-        }
-    }
-
-private:
-    size_t _n;
-    std::vector<size_t> _bitrev;
-    std::vector<std::complex<float>> _twiddle;
-};
-
 struct PsdFrame
 {
     uint64_t frameIndex = 0;
@@ -780,7 +723,7 @@ public:
     WelchBandPsd(const double fs, const double bandwidth, const size_t nfft)
         : _fs(fs), _bandwidth(bandwidth), _nfft(nfft), _hop(nfft / 2),
           _ring(2 * nfft, {0.0f, 0.0f}), _window(nfft), _fft(nfft),
-          _powerSum(nfft, 0.0), _fftPlan(nfft)
+          _powerSum(nfft, 0.0), _fftPlan(createFftBackend(nfft))
     {
         for (size_t i = 0; i < _nfft; ++i)
         {
@@ -879,7 +822,7 @@ private:
     {
         const std::complex<float> *oldest = _ring.data() + _write;
         for (size_t i = 0; i < _nfft; ++i) _fft[i] = oldest[i] * _window[i];
-        _fftPlan.execute(_fft);
+        _fftPlan->execute(_fft);
 
         PsdFrame &frame = _frameRing[_frameWrite];
         if (++_frameWrite == _frameRing.size()) _frameWrite = 0;
@@ -913,7 +856,7 @@ private:
     std::vector<float> _window;
     std::vector<std::complex<float>> _fft;
     std::vector<double> _powerSum;
-    Radix2Fft _fftPlan;
+    std::shared_ptr<FftBackend> _fftPlan;
     std::vector<size_t> _bandBins;
     std::vector<double> _frequencies;
     std::function<void(const PsdFrame &)> _callback;

@@ -9,6 +9,7 @@ project(Meteoris
 option(METEORIS_BUILD_SIM "Build the SoapySDR meteoris_sim plugin" ON)
 option(METEORIS_NATIVE_OPTIMIZATION "Optimize generated code for the build host CPU" ON)
 option(METEORIS_FAST_MATH "Enable fast floating-point math for DSP kernels" ON)
+option(METEORIS_USE_FFTW "Use FFTW3 for FFT instead of internal Radix-2 FFT" OFF)
 
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -22,17 +23,54 @@ endif()
 find_package(Threads REQUIRED)
 find_package(spdlog CONFIG REQUIRED)
 
+# Optional FFTW3 support for FFT backend
+if(METEORIS_USE_FFTW)
+    find_package(PkgConfig QUIET)
+    if(PkgConfig_FOUND)
+        pkg_check_modules(FFTW3F IMPORTED_TARGET fftw3f)
+        if(FFTW3F_FOUND)
+            message(STATUS "Found FFTW3f: ${FFTW3F_LIBRARIES}")
+            set(METEORIS_FFT_LIBRARIES PkgConfig::FFTW3F)
+        else()
+            message(WARNING "FFTW3f not found via pkg-config, falling back to CMake find_package")
+            find_package(FFTW3 COMPONENTS FLOAT)
+            if(FFTW3_FOUND)
+                set(METEORIS_FFT_LIBRARIES FFTW3::FFTW3F)
+            else()
+                message(WARNING "FFTW3f not found, building with internal Radix-2 FFT")
+                set(METEORIS_USE_FFTW OFF)
+            endif()
+        endif()
+    else()
+        find_package(FFTW3 COMPONENTS FLOAT)
+        if(FFTW3_FOUND)
+            set(METEORIS_FFT_LIBRARIES FFTW3::FFTW3F)
+        else()
+            message(WARNING "FFTW3f not found, building with internal Radix-2 FFT")
+            set(METEORIS_USE_FFTW OFF)
+        endif()
+    endif()
+endif()
+
+if(METEORIS_USE_FFTW)
+    message(STATUS "Building with FFTW3f FFT backend")
+else()
+    message(STATUS "Building with internal Radix-2 FFT backend")
+endif()
+
 add_executable(meteoris
     src/meteoris.cpp
     src/detector/detector_registry.cpp
     src/detector/echoes_automatic_detector.cpp
     src/detector/peak_tracker_detector.cpp
+    src/fft/fft_backend.cpp
 )
 
 target_include_directories(meteoris PRIVATE
     src
     ${HDF5_INCLUDE_DIRS}
     ${SoapySDR_INCLUDE_DIRS}
+    ${FFTW3F_INCLUDE_DIRS}
 )
 
 if(TARGET SoapySDR::SoapySDR)
@@ -53,6 +91,11 @@ target_link_libraries(meteoris PRIVATE
     Threads::Threads
     spdlog::spdlog
 )
+
+if(METEORIS_USE_FFTW)
+    target_link_libraries(meteoris PRIVATE ${METEORIS_FFT_LIBRARIES})
+    target_compile_definitions(meteoris PRIVATE METEORIS_USE_FFTW)
+endif()
 
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     target_compile_options(meteoris PRIVATE

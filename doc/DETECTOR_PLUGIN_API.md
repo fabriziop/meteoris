@@ -27,9 +27,12 @@ src/
     detector.hpp
     detector_registry.cpp
     peak_tracker_detector.cpp
+    echoes_automatic_detector.cpp
 ```
 
-`meteoris.cpp` no longer contains the peak extraction/tracking algorithm.
+`meteoris.cpp` no longer contains detector-specific configuration structs, defaults,
+parsing, or validation. It retains only common detector selection and recorder/event
+settings.
 
 ## Core interface
 
@@ -49,7 +52,7 @@ Detector Info
 The detector API version is currently:
 
 ```text
-DETECTOR_API_VERSION = 2
+DETECTOR_API_VERSION = 3
 ```
 
 ## Frame ownership
@@ -193,18 +196,40 @@ plugin
   +--> future offline detector replay/comparison tools
 ```
 
+## Configuration schema
+
+Detector-specific TOML values are stored by Meteoris as raw scalar strings in
+`detector::Config`. The core parses TOML structure, but it does not interpret the
+types or semantics of plugin-owned keys.
+
+Each compile-time detector implementation owns:
+
+- its private typed configuration struct;
+- a `ConfigField` schema containing relative TOML key, default TOML value, and
+  description;
+- conversion from the generic `Config` view into its private configuration;
+- semantic and PSD-geometry validation;
+- optional generic recorder requirements, currently `minPreContextSeconds`.
+
+`meteoris.cpp` owns only common detector keys such as `enabled`, `plugin`, `threads`,
+`diagnostic_interval_s`, `pre_context_s`, `post_context_s`, `max_event_seconds`, and
+`rearm_seconds`. Plugin schemas are also used to render the effective/default TOML,
+so adding a detector does not require adding its settings to `meteoris.cpp`.
+
+Configuration files may contain settings for multiple compiled-in detectors. The
+registry accepts keys declared by any compiled-in schema and rejects unknown detector
+keys, preserving typo detection without coupling the core to a concrete plugin.
+
 ## Registry/factory
 
 `detector_registry.cpp` contains the compile-time registry.
 
-Currently:
+Currently the registered implementations are:
 
 ```text
 peak_tracker
 echoes_automatic
 ```
-
-is the only registered implementation.
 
 Adding a second detector requires:
 

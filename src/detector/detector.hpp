@@ -3,12 +3,14 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <map>
 #include <string>
+#include <vector>
 
 namespace meteoris {
 namespace detector {
 
-constexpr uint32_t DETECTOR_API_VERSION = 2;
+constexpr uint32_t DETECTOR_API_VERSION = 3;
 
 enum class State
 {
@@ -151,73 +153,51 @@ public:
         const ProcessOptions &options = ProcessOptions()) = 0;
 };
 
-// Current built-in plugin configuration. Phase 1 keeps the existing TOML
-// parameter names for compatibility while moving ownership of algorithm logic
-// out of meteoris.cpp.
-struct PeakTrackerConfig
+// Detector configuration is intentionally schema-driven: Meteoris stores raw
+// TOML scalar values without knowing detector-specific parameter types. Each
+// compile-time plugin owns its schema, defaults, parsing, and validation.
+struct ConfigField
 {
-    size_t frequencyMeanBins = 5;
-    size_t timeMeanPsds = 3;
-    double peakThresholdDb = 5.0;
-    double minPeakSeparationHz = 300.0;
-    size_t maxPeaksPerPsd = 20;
-
-    bool stationaryEnabled = true;
-    double stationaryMinHz = -5000.0;
-    double stationaryMaxHz = 5000.0;
-    double stationaryMaxDfHz = 250.0;
-    double stationaryActivationSeconds = 0.5;
-    double stationaryActivationFraction = 0.50;
-    double stationaryLostSeconds = 0.30;
-    double stationaryMaxDriftHzS = 1000.0;
-
-    bool chirpEnabled = true;
-    double chirpMinHz = -50000.0;
-    double chirpMaxHz = 50000.0;
-    double chirpMaxDfHz = 1500.0;
-    double chirpActivationSeconds = 0.05;
-    double chirpActivationFraction = 0.70;
-    double chirpLostSeconds = 0.08;
-    double chirpMinDriftHzS = 3000.0;
-    double chirpMaxDriftHzS = 150000.0;
+    ConfigField(const char *k, const char *d, const char *desc)
+        : key(k), defaultValue(d), description(desc) {}
+    const char *key;          // relative to detector., e.g. stationary.min_hz
+    const char *defaultValue; // TOML scalar spelling
+    const char *description;
 };
 
-// Echoes-style scan-power detector. Absolute levels use Meteoris PSD-density
-// dB/Hz; differential and automatic thresholds are dB differences.
-struct EchoesAutomaticConfig
+class Config
 {
-    std::string thresholdMode = "automatic"; // absolute|differential|automatic
-
-    // A non-positive width selects the complete PSD band.
-    double detectionCenterHz = 0.0;
-    double detectionWidthHz = 0.0;
-
-    double absoluteLowerDbHz = -90.0;
-    double absoluteUpperDbHz = -85.0;
-    double differentialLowerDb = 4.0;
-    double differentialUpperDb = 7.0;
-
-    // Automatic lower = idle mean(S-N) + lowerOffset.
-    // Automatic upper = lower + upperDelta.
-    double automaticLowerOffsetDb = 4.0;
-    double automaticUpperDeltaDb = 3.0;
-    double automaticWarmupSeconds = 5.0;
-    double automaticBaselineTimeConstantSeconds = 30.0;
-    double automaticStddevWindowSeconds = 1.0;
-    double automaticEndStddevFactor = 2.0;
-
-    double delayBeforeTriggerSeconds = 0.0;
-    double joinEventsSeconds = 1.0;
+public:
+    void set(const std::string &key, const std::string &rawValue);
+    bool has(const std::string &key) const;
+    std::string raw(const std::string &key, const std::string &defaultValue) const;
+    std::string stringValue(const std::string &key, const std::string &defaultValue) const;
+    bool boolValue(const std::string &key, bool defaultValue) const;
+    size_t sizeValue(const std::string &key, size_t defaultValue) const;
+    double doubleValue(const std::string &key, double defaultValue) const;
+    const std::map<std::string, std::string> &values() const { return _values; }
+private:
+    std::map<std::string, std::string> _values;
 };
 
 struct Selection
 {
     std::string plugin = "peak_tracker";
     unsigned threads = 1;
-    PeakTrackerConfig peakTracker;
-    EchoesAutomaticConfig echoesAutomatic;
+    Config config;
 };
 
+struct Requirements
+{
+    // Minimum recorder pre-context required by this detector configuration.
+    double minPreContextSeconds = 0.0;
+};
+
+std::vector<ConfigField> schema(const std::string &plugin);
+std::vector<std::string> pluginNames();
+Requirements requirements(const Selection &selection,
+                          const Environment &environment);
+void validate(const Selection &selection, const Environment &environment);
 std::unique_ptr<IDetector> create(const Selection &selection,
                                   const Environment &environment);
 

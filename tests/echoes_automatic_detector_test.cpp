@@ -5,7 +5,7 @@
 #include <memory>
 #include <vector>
 
-using meteoris::detector::EchoesAutomaticConfig;
+using meteoris::detector::Config;
 using meteoris::detector::Environment;
 using meteoris::detector::Frame;
 using meteoris::detector::IDetector;
@@ -29,7 +29,7 @@ Frame frame(const std::vector<float> &psd, const uint64_t index)
     return f;
 }
 
-std::unique_ptr<IDetector> detector(EchoesAutomaticConfig cfg)
+std::unique_ptr<IDetector> detector(Config cfg)
 {
     Environment environment;
     environment.bins = 8;
@@ -38,17 +38,17 @@ std::unique_ptr<IDetector> detector(EchoesAutomaticConfig cfg)
     environment.framePeriodSeconds = 0.1;
     Selection selection;
     selection.plugin = "echoes_automatic";
-    selection.echoesAutomatic = cfg;
+    selection.config = cfg;
     return meteoris::detector::create(selection, environment);
 }
 
 void testAbsoluteHysteresisAndJoin()
 {
-    EchoesAutomaticConfig cfg;
-    cfg.thresholdMode = "absolute";
-    cfg.absoluteLowerDbHz = 5.0;
-    cfg.absoluteUpperDbHz = 10.0;
-    cfg.joinEventsSeconds = 0.2;
+    Config cfg;
+    cfg.set("echoes.threshold_mode", "\"absolute\"");
+    cfg.set("echoes.absolute_lower_db_hz", "5.0");
+    cfg.set("echoes.absolute_upper_db_hz", "10.0");
+    cfg.set("echoes.join_events_closer_than_s", "0.2");
     std::unique_ptr<IDetector> d = detector(cfg);
     const std::vector<float> quiet(8, 1.0f);
     std::vector<float> peak(8, 1.0f);
@@ -63,13 +63,13 @@ void testAbsoluteHysteresisAndJoin()
 
 void testDifferentialAndInterval()
 {
-    EchoesAutomaticConfig cfg;
-    cfg.thresholdMode = "differential";
-    cfg.differentialLowerDb = 2.0;
-    cfg.differentialUpperDb = 4.0;
-    cfg.detectionCenterHz = 0.0;
-    cfg.detectionWidthHz = 2.0;
-    cfg.joinEventsSeconds = 0.0;
+    Config cfg;
+    cfg.set("echoes.threshold_mode", "\"differential\"");
+    cfg.set("echoes.differential_lower_db", "2.0");
+    cfg.set("echoes.differential_upper_db", "4.0");
+    cfg.set("echoes.detection_center_hz", "0.0");
+    cfg.set("echoes.detection_width_hz", "2.0");
+    cfg.set("echoes.join_events_closer_than_s", "0.0");
     std::unique_ptr<IDetector> d = detector(cfg);
     std::vector<float> outsidePeak(8, 1.0f);
     outsidePeak[0] = 1000.0f;
@@ -82,14 +82,14 @@ void testDifferentialAndInterval()
 
 void testAutomaticWarmupDelayAndDebugSampling()
 {
-    EchoesAutomaticConfig cfg;
-    cfg.thresholdMode = "automatic";
-    cfg.automaticWarmupSeconds = 0.2;
-    cfg.automaticLowerOffsetDb = 2.0;
-    cfg.automaticUpperDeltaDb = 2.0;
-    cfg.automaticStddevWindowSeconds = 0.1;
-    cfg.delayBeforeTriggerSeconds = 0.2;
-    cfg.joinEventsSeconds = 0.0;
+    Config cfg;
+    cfg.set("echoes.threshold_mode", "\"automatic\"");
+    cfg.set("echoes.automatic_warmup_s", "0.2");
+    cfg.set("echoes.automatic_lower_offset_db", "2.0");
+    cfg.set("echoes.automatic_upper_delta_db", "2.0");
+    cfg.set("echoes.automatic_stddev_window_s", "0.1");
+    cfg.set("echoes.delay_before_trigger_s", "0.2");
+    cfg.set("echoes.join_events_closer_than_s", "0.0");
     std::unique_ptr<IDetector> d = detector(cfg);
     const std::vector<float> quiet(8, 1.0f);
     std::vector<float> peak(8, 1.0f);
@@ -113,10 +113,10 @@ void testAutomaticWarmupDelayAndDebugSampling()
 
 void testPreprocessOnlyNeverActivates()
 {
-    EchoesAutomaticConfig cfg;
-    cfg.thresholdMode = "differential";
-    cfg.differentialLowerDb = 2.0;
-    cfg.differentialUpperDb = 4.0;
+    Config cfg;
+    cfg.set("echoes.threshold_mode", "\"differential\"");
+    cfg.set("echoes.differential_lower_db", "2.0");
+    cfg.set("echoes.differential_upper_db", "4.0");
     std::unique_ptr<IDetector> d = detector(cfg);
     std::vector<float> peak(8, 1.0f);
     peak[4] = 100.0f;

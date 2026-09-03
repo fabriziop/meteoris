@@ -12,6 +12,60 @@ namespace meteoris {
 namespace detector {
 namespace {
 
+struct PeakTrackerConfig
+{
+    size_t frequencyMeanBins = 5;
+    size_t timeMeanPsds = 3;
+    double peakThresholdDb = 5.0;
+    double minPeakSeparationHz = 300.0;
+    size_t maxPeaksPerPsd = 20;
+    bool stationaryEnabled = true;
+    double stationaryMinHz = -5000.0;
+    double stationaryMaxHz = 5000.0;
+    double stationaryMaxDfHz = 250.0;
+    double stationaryActivationSeconds = 0.5;
+    double stationaryActivationFraction = 0.50;
+    double stationaryLostSeconds = 0.30;
+    double stationaryMaxDriftHzS = 1000.0;
+    bool chirpEnabled = true;
+    double chirpMinHz = -50000.0;
+    double chirpMaxHz = 50000.0;
+    double chirpMaxDfHz = 1500.0;
+    double chirpActivationSeconds = 0.05;
+    double chirpActivationFraction = 0.70;
+    double chirpLostSeconds = 0.08;
+    double chirpMinDriftHzS = 3000.0;
+    double chirpMaxDriftHzS = 150000.0;
+};
+
+PeakTrackerConfig parsePeakTrackerConfig(const Config &c)
+{
+    PeakTrackerConfig x;
+    x.frequencyMeanBins = c.sizeValue("frequency_mean_bins", x.frequencyMeanBins);
+    x.timeMeanPsds = c.sizeValue("time_mean_psds", x.timeMeanPsds);
+    x.peakThresholdDb = c.doubleValue("peak_threshold_db", x.peakThresholdDb);
+    x.minPeakSeparationHz = c.doubleValue("min_peak_separation_hz", x.minPeakSeparationHz);
+    x.maxPeaksPerPsd = c.sizeValue("max_peaks_per_psd", x.maxPeaksPerPsd);
+    x.stationaryEnabled = c.boolValue("stationary.enabled", x.stationaryEnabled);
+    x.stationaryMinHz = c.doubleValue("stationary.min_hz", x.stationaryMinHz);
+    x.stationaryMaxHz = c.doubleValue("stationary.max_hz", x.stationaryMaxHz);
+    x.stationaryMaxDfHz = c.doubleValue("stationary.max_df_hz", x.stationaryMaxDfHz);
+    x.stationaryActivationSeconds = c.doubleValue("stationary.activation_time_s", x.stationaryActivationSeconds);
+    x.stationaryActivationFraction = c.doubleValue("stationary.activation_fraction", x.stationaryActivationFraction);
+    x.stationaryLostSeconds = c.doubleValue("stationary.lost_s", x.stationaryLostSeconds);
+    x.stationaryMaxDriftHzS = c.doubleValue("stationary.max_drift_hz_s", x.stationaryMaxDriftHzS);
+    x.chirpEnabled = c.boolValue("chirp.enabled", x.chirpEnabled);
+    x.chirpMinHz = c.doubleValue("chirp.min_hz", x.chirpMinHz);
+    x.chirpMaxHz = c.doubleValue("chirp.max_hz", x.chirpMaxHz);
+    x.chirpMaxDfHz = c.doubleValue("chirp.max_df_hz", x.chirpMaxDfHz);
+    x.chirpActivationSeconds = c.doubleValue("chirp.activation_time_s", x.chirpActivationSeconds);
+    x.chirpActivationFraction = c.doubleValue("chirp.activation_fraction", x.chirpActivationFraction);
+    x.chirpLostSeconds = c.doubleValue("chirp.lost_s", x.chirpLostSeconds);
+    x.chirpMinDriftHzS = c.doubleValue("chirp.min_drift_hz_s", x.chirpMinDriftHzS);
+    x.chirpMaxDriftHzS = c.doubleValue("chirp.max_drift_hz_s", x.chirpMaxDriftHzS);
+    return x;
+}
+
 struct SpectralPeak
 {
     double frequencyHz = 0.0;
@@ -765,12 +819,69 @@ private:
     Info _info;
 };
 
+std::vector<ConfigField> peakTrackerSchema()
+{
+    return {
+        {"frequency_mean_bins", "5", "Odd frequency smoothing width in PSD bins"},
+        {"time_mean_psds", "3", "Causal PSD averaging depth"},
+        {"peak_threshold_db", "5.0", "Peak threshold above the local background"},
+        {"min_peak_separation_hz", "300.0", "Minimum separation between retained peaks"},
+        {"max_peaks_per_psd", "20", "Maximum retained peaks per PSD"},
+        {"stationary.enabled", "true", "Enable stationary-track classification"},
+        {"stationary.min_hz", "-5000.0", "Stationary search lower frequency"},
+        {"stationary.max_hz", "5000.0", "Stationary search upper frequency"},
+        {"stationary.max_df_hz", "250.0", "Stationary association tolerance"},
+        {"stationary.activation_time_s", "0.5", "Stationary activation time"},
+        {"stationary.activation_fraction", "0.50", "Stationary activation occupancy"},
+        {"stationary.lost_s", "0.30", "Stationary lost-track timeout"},
+        {"stationary.max_drift_hz_s", "1000.0", "Maximum stationary drift rate"},
+        {"chirp.enabled", "true", "Enable chirp-track classification"},
+        {"chirp.min_hz", "-50000.0", "Chirp search lower frequency"},
+        {"chirp.max_hz", "50000.0", "Chirp search upper frequency"},
+        {"chirp.max_df_hz", "1500.0", "Chirp association tolerance"},
+        {"chirp.activation_time_s", "0.05", "Chirp activation time"},
+        {"chirp.activation_fraction", "0.70", "Chirp activation occupancy"},
+        {"chirp.lost_s", "0.08", "Chirp lost-track timeout"},
+        {"chirp.min_drift_hz_s", "3000.0", "Minimum chirp drift rate"},
+        {"chirp.max_drift_hz_s", "150000.0", "Maximum chirp drift rate"}
+    };
+}
+
+void validatePeakTrackerConfig(const Config &config, const Environment &environment)
+{
+    const PeakTrackerConfig c = parsePeakTrackerConfig(config);
+    if (c.frequencyMeanBins == 0 || (c.frequencyMeanBins & 1u) == 0)
+        throw std::runtime_error("detector.frequency_mean_bins must be an odd positive integer");
+    if (c.timeMeanPsds == 0) throw std::runtime_error("detector.time_mean_psds must be >= 1");
+    if (!(c.peakThresholdDb > 0.0)) throw std::runtime_error("detector.peak_threshold_db must be > 0");
+    if (c.minPeakSeparationHz < 0.0) throw std::runtime_error("detector.min_peak_separation_hz must be >= 0");
+    if (c.maxPeaksPerPsd == 0) throw std::runtime_error("detector.max_peaks_per_psd must be >= 1");
+    if (!c.stationaryEnabled && !c.chirpEnabled)
+        throw std::runtime_error("detector enabled but stationary and chirp tracking are both disabled");
+    const double loBand = environment.frequencyStartHz;
+    const double hiBand = environment.frequencyStartHz + environment.frequencyStepHz * double(environment.bins ? environment.bins - 1 : 0);
+    auto range = [&](const char *name, bool enabled, double lo, double hi, double maxDf, double activationTime, double fraction, double lost) {
+        if (!enabled) return;
+        if (!(lo < hi && lo >= loBand && hi <= hiBand))
+            throw std::runtime_error(std::string(name) + " frequency range must lie inside detector PSD band");
+        if (!(maxDf > 0.0) || activationTime < 0.0 || !(fraction > 0.0 && fraction <= 1.0) || lost < 0.0)
+            throw std::runtime_error(std::string("invalid ") + name + " tracking parameters");
+    };
+    range("detector.stationary", c.stationaryEnabled, c.stationaryMinHz, c.stationaryMaxHz, c.stationaryMaxDfHz, c.stationaryActivationSeconds, c.stationaryActivationFraction, c.stationaryLostSeconds);
+    if (c.stationaryEnabled && c.stationaryMaxDriftHzS < 0.0)
+        throw std::runtime_error("detector.stationary.max_drift_hz_s must be >= 0");
+    range("detector.chirp", c.chirpEnabled, c.chirpMinHz, c.chirpMaxHz, c.chirpMaxDfHz, c.chirpActivationSeconds, c.chirpActivationFraction, c.chirpLostSeconds);
+    if (c.chirpEnabled && !(c.chirpMinDriftHzS >= 0.0 && c.chirpMinDriftHzS < c.chirpMaxDriftHzS))
+        throw std::runtime_error("detector.chirp drift limits must satisfy 0 <= min < max");
+}
+
 std::unique_ptr<IDetector> makePeakTrackerDetector(
-    const PeakTrackerConfig &cfg,
+    const Config &config,
     const Environment &environment)
 {
+    validatePeakTrackerConfig(config, environment);
     return std::unique_ptr<IDetector>(
-        new PeakTrackerDetectorPlugin(cfg, environment));
+        new PeakTrackerDetectorPlugin(parsePeakTrackerConfig(config), environment));
 }
 
 } // namespace detector

@@ -79,7 +79,7 @@
 
 namespace
 {
-constexpr const char *METEORIS_VERSION = "0.2.0";
+constexpr const char *METEORIS_VERSION = "0.3.0";
 constexpr const char *METEORIS_AUTHOR = "Fabrizio Pollastri <mxgbot@gmail.com>";
 constexpr const char *METEORIS_HDF5_FORMAT = "meteoris v0";
 constexpr const char *METEORIS_HDF5_AUTHOR = "Fabrizio Pollastri";

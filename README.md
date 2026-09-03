@@ -15,7 +15,7 @@ parameters.
 
 Meteoris has currently been tested on Linux with the [HackRF One
 SDR](https://hackrf.readthedocs.io/en/latest/hackrf_one.html).
-Meteoris is currently at version 0.2.0 and should therefore be considered alpha
+Meteoris is currently at version 0.3.0 and should therefore be considered alpha
 software.
 
 ### Author's Note
@@ -36,8 +36,9 @@ Without AI, this project probably would not exist.
     Echoes-style automatic threshold detection.
   * Efficient HDF5 storage format for meteor-event data.
   * Event-list display with details for each event.
-  * Event waterfall display with time/frequency axes and signal
-    level represented by color.
+  * Interactive event display with a time/frequency waterfall, an optional
+    per-time-column maximum-PSD trace, shared time axes, and signal level
+    represented by color.
   * SDR simulator that generates synthetic meteor-scatter radio signals
     for testing and calibration.
 
@@ -298,8 +299,19 @@ through recorded events:
 - `q`: quit
 - close the window: quit
 
-The viewer also provides interactive PSD color-limit sliders and buttons for
-showing/hiding the grid and trigger markers.
+The viewer also provides interactive PSD color-limit sliders and controls for
+the display:
+
+- **Max PSD** toggles a plot stacked above the waterfall. Its Y axis shows the
+  maximum PSD density (dB/Hz) across all displayed frequency bins for each time
+  column. The upper plot shares the waterfall time axis and repeats the time
+  ticks at the top. When the Max PSD plot is hidden, the waterfall expands to
+  use the released vertical space; enabling it restores the stacked layout.
+- **Trigger** shows or hides detector trigger markers.
+- **Grid** shows or hides the plot grid.
+- The display header identifies the Meteoris version and shows the current
+  event as `<event>/<total events in file>`, together with the recorded-data
+  filename and the existing event information.
 
 Meteoris uses HDF5 Single-Writer/Multiple-Reader (SWMR) mode by default so the
 active daily recording can be inspected without stopping acquisition or making
@@ -309,13 +321,17 @@ a copy. While browsing an active SWMR file:
 
 Example of a typical meteor-scatter event captured by Meteoris. It is an echo
 of the GRAVES transmitter (143.050 MHz, Dijon, France) from the overdense
-ionized trail of a meteor.
+ionized trail of a meteor. Spectrogram zoomed.
 
-![](doc/meteoris_event_20260830115909.png)
+![](doc/meteoris_event_20260830115909_zoom.png)
 
 Example of meteor scatter with a complex structure. Spectrogram zoomed.
 
 ![](doc/meteoris_event_20260831090518_zoom.png)
+
+Example of a strong meteor scatter. Spectrogram zoomed.
+
+![](doc/meteoris_event_20260903142123_zoom.png)
 
 
 # Simulator

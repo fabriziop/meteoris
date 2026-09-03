@@ -1,7 +1,7 @@
 # Meteoris configuration reference
 
 This document describes the `meteoris.toml` configuration file used by
-Meteoris 0.2.0.
+Meteoris 0.3.0.
 
 Meteoris reads configuration values from TOML sections and then applies any
 command-line overrides. The precedence is:

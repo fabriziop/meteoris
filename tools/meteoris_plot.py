@@ -23,7 +23,7 @@ The program:
     - skips by -20/-10/+10/+20 events with Z/X/C/V;
     - terminate the interactive browser with Q or by closing the window;
   - provides interactive PSD color-scale minimum/maximum sliders;
-  - provides show/hide controls for the X/Y grid and trigger markers;
+  - provides show/hide controls for the max-PSD trace, X/Y grid, and trigger markers;
   - marks trigger ON/OFF positions;
   - can save selected event plots as PNG files.
 
@@ -40,7 +40,7 @@ Examples:
 
 from __future__ import annotations
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 __author__ = "Fabrizio Pollastri <mxgbot@gmail.com>"
 
 
@@ -395,6 +395,7 @@ def auto_color_limits(db: np.ndarray) -> tuple[float, float]:
 def plot_event(
     h5: h5py.File,
     ev: EventSegment,
+    total_events: int,
     cmap: ListedColormap,
     db_min: float | None,
     db_max: float | None,
@@ -428,8 +429,22 @@ def plot_event(
     t_dt = [ns_to_utc(int(x)) for x in ts_ns]
     t_num = mdates.date2num(t_dt)
 
-    fig, ax = plt.subplots(figsize=(plot_cfg.figure_width, plot_cfg.figure_height))
-    fig.subplots_adjust(bottom=0.24)
+    # Two vertically stacked plots share the UTC time axis. The compact upper
+    # plot shows, for each waterfall time column, the maximum PSD density over
+    # all frequency bins.
+    fig, (ax_max_power, ax) = plt.subplots(
+        2, 1,
+        figsize=(plot_cfg.figure_width, plot_cfg.figure_height),
+        sharex=True,
+        gridspec_kw={
+            "height_ratios": (1.0, 4.0),
+            "hspace": 0.0,
+            "left": 0.10,
+            "right": 0.88,
+            "top": 0.90,
+            "bottom": 0.24,
+        },
+    )
     mesh = ax.pcolormesh(
         t_num,
         freq_hz / 1000.0,
@@ -440,10 +455,21 @@ def plot_event(
         vmax=vmax,
         rasterized=True,
     )
+    max_psd_db = np.max(db, axis=1)
+    ax_max_power.plot(t_num, max_psd_db, linewidth=1.1)
+    ax_max_power.set_ylabel("Max PSD\n(dB/Hz)")
+    ax_max_power.grid(True, which="major", axis="both", alpha=0.25)
+
     ax.xaxis_date()
     locator = mdates.AutoDateLocator(minticks=3, maxticks=9)
+    formatter = mdates.ConciseDateFormatter(locator, tz=dt.timezone.utc)
     ax.xaxis.set_major_locator(locator)
-    ax.xaxis.set_major_formatter(mdates.ConciseDateFormatter(locator, tz=dt.timezone.utc))
+    ax.xaxis.set_major_formatter(formatter)
+    # Repeat the shared time ticks and labels on the top edge of the stacked
+    # max-PSD panel. The lower waterfall keeps the normal bottom labels.
+    ax_max_power.tick_params(
+        axis="x", which="both", top=True, labeltop=True, bottom=False, labelbottom=False
+    )
     ax.set_xlabel("Time (UTC)")
     ax.set_ylabel("Frequency offset (kHz)")
 
@@ -455,14 +481,51 @@ def plot_event(
     ax.set_axisbelow(False)
     ax.grid(False, which="major", axis="both")
 
-    title = f"Meteoris event {ev.ordinal} (stored event_id={ev.stored_event_id})"
-    ax.set_title(title)
-    cb = fig.colorbar(mesh, ax=ax, pad=0.02)
+    title = (
+        f"Meteoris event {ev.ordinal}/{total_events} (stored event_id={ev.stored_event_id}) - "
+        f"{Path(h5.filename).name}"
+    )
+    # Keep the event title in the header row, centered at the same vertical
+    # position as the Meteoris/version label. This leaves the upper X tick
+    # labels their own space immediately above the stacked axes.
+    fig.text(0.5, 0.985, title, ha="center", va="top", fontsize=12)
+
+    software_version = __version__
+    try:
+        if "metadata" in h5 and "software_version" in h5["metadata"].attrs:
+            software_version = str(decode_value(h5["metadata"].attrs["software_version"]))
+    except Exception:
+        pass
+    fig.text(0.012, 0.985, f"meteoris {software_version}",
+             ha="left", va="top", fontsize=10, fontweight="bold")
+
+    # Keep explicit positions for both toggle states. When the Max PSD panel
+    # is hidden the waterfall expands to occupy the complete stack height;
+    # restoring it puts both axes back into their original stacked geometry.
+    max_power_pos = ax_max_power.get_position().frozen()
+    waterfall_pos = ax.get_position().frozen()
+    full_stack_pos = [
+        waterfall_pos.x0,
+        waterfall_pos.y0,
+        waterfall_pos.width,
+        max_power_pos.y1 - waterfall_pos.y0,
+    ]
+
+    cax = fig.add_axes([0.90, waterfall_pos.y0, 0.018, waterfall_pos.height])
+    cbar_on_pos = cax.get_position().frozen()
+    cbar_off_pos = [
+        cbar_on_pos.x0,
+        waterfall_pos.y0,
+        cbar_on_pos.width,
+        full_stack_pos[3],
+    ]
+    cb = fig.colorbar(mesh, cax=cax)
     cb.set_label("PSD density (dB/Hz)")
 
     # Mark every trigger ON/OFF transition. Retriggers that occur during the
     # post-trigger tail are intentionally merged into the same Meteoris event,
     # so an event may contain several active/post-active intervals.
+    max_power_state = {"visible": True}
     trigger_lines = []
     trigger_state = {"visible": True}
     trigger_legend = None
@@ -515,12 +578,14 @@ def plot_event(
     slider_hi = max(plot_cfg.slider_max_db, vmax + 1.0)
     ax_min = fig.add_axes([0.14, 0.115, 0.70, 0.025])
     ax_max = fig.add_axes([0.14, 0.070, 0.70, 0.025])
+    ax_max_toggle = fig.add_axes([0.57, 0.020, 0.13, 0.035])
     ax_trigger = fig.add_axes([0.72, 0.020, 0.12, 0.035])
     ax_grid = fig.add_axes([0.86, 0.020, 0.10, 0.035])
     s_min = Slider(ax_min, "Color min (dB/Hz)", slider_lo, slider_hi,
                    valinit=vmin, valstep=plot_cfg.slider_step_db)
     s_max = Slider(ax_max, "Color max (dB/Hz)", slider_lo, slider_hi,
                    valinit=vmax, valstep=plot_cfg.slider_step_db)
+    b_max_power = Button(ax_max_toggle, "Max PSD: ON")
     b_trigger = Button(ax_trigger, "Trigger: ON")
     b_grid = Button(ax_grid, "Grid: OFF")
 
@@ -531,6 +596,22 @@ def plot_event(
         if hi <= lo:
             return
         mesh.set_clim(lo, hi)
+        fig.canvas.draw_idle()
+
+    def toggle_max_power(_event=None):
+        max_power_state["visible"] = not max_power_state["visible"]
+        visible = max_power_state["visible"]
+        ax_max_power.set_visible(visible)
+        if visible:
+            ax_max_power.set_position(max_power_pos)
+            ax.set_position(waterfall_pos)
+            cax.set_position(cbar_on_pos)
+        else:
+            ax.set_position(full_stack_pos)
+            cax.set_position(cbar_off_pos)
+        b_max_power.label.set_text(
+            "Max PSD: ON" if visible else "Max PSD: OFF"
+        )
         fig.canvas.draw_idle()
 
     def toggle_grid(_event=None):
@@ -560,10 +641,11 @@ def plot_event(
 
     s_min.on_changed(update_scale)
     s_max.on_changed(update_scale)
+    b_max_power.on_clicked(toggle_max_power)
     b_trigger.on_clicked(toggle_triggers)
     b_grid.on_clicked(toggle_grid)
     # Keep widget references alive for the lifetime of the figure.
-    fig._meteoris_widgets = (s_min, s_max, b_trigger, b_grid)
+    fig._meteoris_widgets = (s_min, s_max, b_max_power, b_trigger, b_grid)
 
     # Keyboard navigation:
     #   SPACE/ENTER                -> next event
@@ -829,7 +911,7 @@ def main(argv: Iterable[str] | None = None) -> int:
                 # Headless mode still renders/saves every selected event.
                 for n in selected:
                     fig, _navigation = plot_event(
-                        h5, events[n - 1], cmap,
+                        h5, events[n - 1], len(events), cmap,
                         effective_db_min, effective_db_max,
                         args.save_dir, plot_cfg
                     )
@@ -847,7 +929,7 @@ def main(argv: Iterable[str] | None = None) -> int:
                 while 0 <= pos < len(selected):
                     n = selected[pos]
                     fig, navigation = plot_event(
-                        h5, events[n - 1], cmap,
+                        h5, events[n - 1], len(events), cmap,
                         effective_db_min, effective_db_max,
                         args.save_dir, plot_cfg
                     )

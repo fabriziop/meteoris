@@ -1,7 +1,7 @@
 # Meteoris HDF5 recording format
 
 This document describes the HDF5 recording format currently written by
-**Meteoris 0.2.0**.
+**Meteoris 0.3.0**.
 
 The format identifier stored in each new file is:
 
@@ -248,7 +248,7 @@ This attribute describes the Meteoris format/application author.
 For the current software:
 
 ```text
-0.2.0
+0.3.0
 ```
 
 This records the Meteoris version that created the new HDF5 file.

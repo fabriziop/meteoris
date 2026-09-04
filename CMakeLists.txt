@@ -9,7 +9,7 @@ project(Meteoris
 option(METEORIS_BUILD_SIM "Build the SoapySDR meteoris_sim plugin" ON)
 option(METEORIS_NATIVE_OPTIMIZATION "Optimize generated code for the build host CPU" ON)
 option(METEORIS_FAST_MATH "Enable fast floating-point math for DSP kernels" ON)
-option(METEORIS_USE_FFTW "Use FFTW3 for FFT instead of internal Radix-2 FFT" OFF)
+option(METEORIS_USE_FFTW "Use FFTW3 for FFT instead of internal Radix-2 FFT" ON)
 
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)

@@ -430,8 +430,12 @@ executable. `-march=native` is enabled by default and should be disabled for
 cross-machine binary distribution.
 
 When available, the optional FFTW backend is recommended for FFT processing.
-In local Meteoris benchmarks it gives about a 3x speedup compared with the
-embedded radix-2 FFT.
+On the tested x86-64 system, FFTW makes the FFT kernel approximately 3x faster
+than the embedded radix-2 implementation. With the current 4096-point PSD
+pipeline, this corresponds to roughly a 35--40% reduction in post-FIR1
+processing time and an 8--10% reduction in overall DSP processing time. The
+end-to-end gain is smaller because FIR/NCO, decimation, windowing, PSD
+calculation, detector processing, and I/O are unaffected by the FFT backend.
 
 ### Tentative-track diagnostics
 

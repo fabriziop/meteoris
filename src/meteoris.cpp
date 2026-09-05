@@ -744,7 +744,7 @@ public:
     {
         if (_frames == 0)
         {
-            spdlog::info("PSD_frames=0");
+            spdlog::debug("PSD_frames=0");
             return;
         }
 
@@ -764,11 +764,11 @@ public:
             }
         }
         const double peakDb = 10.0 * std::log10(std::max(peak, 1e-30));
-        LOG_INFO_STREAM("PSD_frames=" << _frames);
-        LOG_INFO_STREAM("PSD_peak=" << std::showpos << std::fixed << std::setprecision(3)
+        LOG_DEBUG_STREAM("PSD_frames=" << _frames);
+        LOG_DEBUG_STREAM("PSD_peak=" << std::showpos << std::fixed << std::setprecision(3)
                         << peakHz << std::noshowpos << " Hz peak_density="
                         << std::setprecision(2) << peakDb << " dB/Hz");
-        LOG_INFO_STREAM("PSD_integrated_100kHz_power=" << std::setprecision(9)
+        LOG_DEBUG_STREAM("PSD_integrated_100kHz_power=" << std::setprecision(9)
                         << bandPower);
     }
 
@@ -2037,7 +2037,7 @@ public:
             _detectorRecorder->printSummary();
         if (_continuousRecorder)
             _continuousRecorder->printSummary();
-        LOG_INFO_STREAM("PSD_recorder_queue high_water=" << _highWater
+        LOG_DEBUG_STREAM("PSD_recorder_queue high_water=" << _highWater
                         << "/" << _queueCapacity
                         << " overruns=" << _queueOverruns.load());
     }
@@ -3158,7 +3158,7 @@ int main(int argc, char **argv)
             {
                 firstInputBlockSamples = got;
                 loggedFirstInputBlock = true;
-                LOG_INFO_STREAM("effective_acquisition_DSP_block=" << got
+                LOG_DEBUG_STREAM("effective_acquisition_DSP_block=" << got
                                 << " complex_samples ("
                                 << std::fixed << std::setprecision(3)
                                 << (1000.0 * double(got) / cfg.sampleRate)
@@ -3237,10 +3237,10 @@ int main(int argc, char **argv)
         const double endToEndRate = wallElapsed > 0.0 ? double(totalInput) / wallElapsed : 0.0;
         const double expectedOutput = double(totalInput) / double(cfg.decim1 * cfg.decim2);
 
-        spdlog::info("=== Result ===");
+        spdlog::debug("=== Result ===");
         if (blockCount != 0)
         {
-            LOG_INFO_STREAM("acquisition_DSP_blocks=" << blockCount
+            LOG_DEBUG_STREAM("acquisition_DSP_blocks=" << blockCount
                             << " first=" << firstInputBlockSamples
                             << " min=" << minInputBlockSamples
                             << " max=" << maxInputBlockSamples
@@ -3248,19 +3248,19 @@ int main(int argc, char **argv)
                             << " first_period_ms=" << std::fixed << std::setprecision(3)
                             << (1000.0 * double(firstInputBlockSamples) / cfg.sampleRate));
         }
-        LOG_INFO_STREAM("input_samples=" << totalInput << " output_samples=" << totalOutput
+        LOG_DEBUG_STREAM("input_samples=" << totalInput << " output_samples=" << totalOutput
                         << " expected_output~=" << std::fixed << std::setprecision(0)
                         << expectedOutput);
-        LOG_INFO_STREAM(std::setprecision(6) << "stream_duration=" << realtimeDuration
+        LOG_DEBUG_STREAM(std::setprecision(6) << "stream_duration=" << realtimeDuration
                         << " s wall_elapsed=" << wallElapsed << " s");
-        LOG_INFO_STREAM(std::setprecision(3) << "end_to_end_input_rate="
+        LOG_DEBUG_STREAM(std::setprecision(3) << "end_to_end_input_rate="
                         << endToEndRate / 1e6 << " Msps");
-        LOG_INFO_STREAM(std::setprecision(6) << "DSP_time=" << dspSeconds
+        LOG_DEBUG_STREAM(std::setprecision(6) << "DSP_time=" << dspSeconds
                         << " s DSP_CPU_budget=" << std::setprecision(1) << (100.0 * dspUtil) << "%");
-        LOG_INFO_STREAM(std::setprecision(6) << "DSP_breakdown_wall: FIR1_NCO="
+        LOG_DEBUG_STREAM(std::setprecision(6) << "DSP_breakdown_wall: FIR1_NCO="
                         << dsp.fir1WallSeconds() << " s post_FIR1="
                         << dsp.postFir1WallSeconds() << " s");
-        LOG_INFO_STREAM(std::setprecision(6) << "max_DSP_block_time=" << maxBlockDsp
+        LOG_DEBUG_STREAM(std::setprecision(6) << "max_DSP_block_time=" << maxBlockDsp
                         << " s nominal_buffer_budget=" << double(streamMtu) / cfg.sampleRate << " s");
         if (!blockDspTimes.empty())
         {
@@ -3273,19 +3273,19 @@ int main(int argc, char **argv)
                 const double frac = pos - double(lo);
                 return blockDspTimes[lo] + frac * (blockDspTimes[hi] - blockDspTimes[lo]);
             };
-            LOG_INFO_STREAM("DSP_block_time_percentiles: p50=" << percentile(0.50)
+            LOG_DEBUG_STREAM("DSP_block_time_percentiles: p50=" << percentile(0.50)
                             << " s p95=" << percentile(0.95)
                             << " s p99=" << percentile(0.99)
                             << " s p99.9=" << percentile(0.999) << " s");
         }
         const double missPct = blockCount > 0 ? 100.0 * double(deadlineMisses) / double(blockCount) : 0.0;
-        LOG_INFO_STREAM("DSP_deadline_misses=" << deadlineMisses << "/" << blockCount
+        LOG_DEBUG_STREAM("DSP_deadline_misses=" << deadlineMisses << "/" << blockCount
                         << " (" << std::setprecision(3) << missPct << "%)");
-        LOG_INFO_STREAM((useDirect ? "acquire_calls=" : "read_calls=") << readCalls
+        LOG_DEBUG_STREAM((useDirect ? "acquire_calls=" : "read_calls=") << readCalls
                         << " timeouts=" << timeouts << " overflows=" << overflows);
         dsp.psd().printSummary();
         if (cfg.agcEnabled)
-            LOG_INFO_STREAM("AGC_final_gain=" << currentGain << " dB smoothed_saturation="
+            LOG_DEBUG_STREAM("AGC_final_gain=" << currentGain << " dB smoothed_saturation="
                             << agc.smoothedPercent() << "% gain_changes=" << agc.gainChanges());
         const bool sustainableStreaming = overflows == 0 && timeouts == 0 &&
                                           dspUtil < 1.0 && endToEndRate >= 0.99 * cfg.sampleRate;

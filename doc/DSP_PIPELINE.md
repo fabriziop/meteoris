@@ -913,9 +913,11 @@ This is useful when interpreting absolute or relative PSD levels.
 # 28. PSD callback to the detector
 
 After a PSD frame is constructed, the PSD engine invokes its configured
-callback.
+callback.  The acquisition thread does not run detector or HDF5 work there.
+Instead, the completed frame is copied into a bounded, preallocated recorder
+ring and the acquisition loop immediately continues with SDR input.
 
-When the detector is enabled, the callback sends the frame to:
+The dedicated recorder thread consumes queued frames and sends them to:
 
 ```text
 PsdDetectorRecorder::consume()
@@ -927,7 +929,7 @@ The DSP pipeline therefore ends, from a signal-processing perspective, at:
 PsdFrame
 ```
 
-The detector then performs:
+The recorder thread then performs:
 
 ```text
 symmetric frequency-band selection
@@ -936,6 +938,10 @@ N-frame qualification
 event state management
 HDF5 recording
 ```
+
+The queue is deliberately bounded.  If storage falls behind long enough to
+fill it, Meteoris reports a recorder-queue overrun and stops rather than
+silently dropping PSD rows.  Shutdown drains the queue before HDF5 is closed.
 
 Those operations are described separately in the Meteoris detector
 documentation.

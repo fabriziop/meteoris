@@ -59,6 +59,8 @@
 #include <thread>
 #include <mutex>
 #include <condition_variable>
+#include <atomic>
+#include <exception>
 
 #include <spdlog/spdlog.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
@@ -1924,6 +1926,221 @@ private:
     double _lastDetectorProcessUs = 0.0;
 };
 
+
+// Acquisition/DSP must never wait for HDF5.  Completed PSD frames are copied
+// into this bounded queue and all detector/recording state is owned by the
+// worker thread.  In particular, trigger-time pre-context writes, compression,
+// SWMR flushes and filesystem latency cannot delay the next SDR read.
+class AsyncPsdRecorder
+{
+public:
+    AsyncPsdRecorder(const Config &cfg,
+                     const std::vector<double> &frequencies,
+                     RecorderMetadata metadata)
+        : _continuous(cfg.recordingMode == "continuous")
+    {
+        const double framePeriodSeconds =
+            (metadata.outputRate > 0.0 && metadata.nfft > 0)
+                ? (double(metadata.nfft / 2) / metadata.outputRate) : 0.0;
+        if (!(framePeriodSeconds > 0.0))
+            throw std::runtime_error("cannot derive PSD frame period for async recorder");
+
+        // Roughly eight seconds of PSD buffering, bounded to keep memory use
+        // predictable even with unusual FFT/overlap configurations.
+        _queueCapacity = static_cast<size_t>(std::ceil(8.0 / framePeriodSeconds));
+        _queueCapacity = std::max<size_t>(256, std::min<size_t>(4096, _queueCapacity));
+        _queue.resize(_queueCapacity);
+        for (PsdFrame &slot : _queue)
+            slot.powerDensity.resize(frequencies.size());
+
+        if (_continuous)
+            _continuousRecorder.reset(new ContinuousPsdRecorder(
+                cfg, frequencies, std::move(metadata)));
+        else
+            _detectorRecorder.reset(new PsdDetectorRecorder(
+                cfg, frequencies, std::move(metadata)));
+
+        LOG_INFO_STREAM("PSD_recorder_thread=ON queue_capacity=" << _queueCapacity
+                        << " frames (~" << (_queueCapacity * framePeriodSeconds)
+                        << " s)");
+        _worker = std::thread(&AsyncPsdRecorder::run, this);
+    }
+
+    ~AsyncPsdRecorder()
+    {
+        stopAndDrainNoThrow();
+    }
+
+    AsyncPsdRecorder(const AsyncPsdRecorder &) = delete;
+    AsyncPsdRecorder &operator=(const AsyncPsdRecorder &) = delete;
+
+    bool enqueue(const PsdFrame &frame)
+    {
+        {
+            std::lock_guard<std::mutex> lock(_mutex);
+            if (_workerError)
+                return false;
+            if (_stopRequested)
+                return false;
+            if (_queueCount >= _queueCapacity)
+            {
+                ++_queueOverruns;
+                LOG_ERROR_STREAM("PSD recorder queue overrun: capacity="
+                                 << _queueCapacity
+                                 << " high_water=" << _highWater
+                                 << " overruns=" << _queueOverruns.load()
+                                 << "; refusing to drop PSD data silently");
+                return false;
+            }
+            copyFrame(_queue[_queueWrite], frame);
+            if (++_queueWrite == _queueCapacity) _queueWrite = 0;
+            ++_queueCount;
+            _queued.store(_queueCount, std::memory_order_release);
+            _highWater = std::max(_highWater, _queueCount);
+        }
+        _cv.notify_one();
+        return true;
+    }
+
+    bool eventInProgress() const
+    {
+        if (_continuous) return false;
+        return _eventInProgress.load(std::memory_order_acquire) ||
+               _workerBusy.load(std::memory_order_acquire) ||
+               _queued.load(std::memory_order_acquire) != 0;
+    }
+
+    bool finished() const
+    {
+        return _continuous && _finished.load(std::memory_order_acquire);
+    }
+
+    void throwIfFailed() const
+    {
+        std::exception_ptr error;
+        {
+            std::lock_guard<std::mutex> lock(_mutex);
+            error = _workerError;
+        }
+        if (error) std::rethrow_exception(error);
+    }
+
+    void stopAndDrain()
+    {
+        stopAndDrainNoThrow();
+        throwIfFailed();
+    }
+
+    void printSummary() const
+    {
+        if (_detectorRecorder)
+            _detectorRecorder->printSummary();
+        if (_continuousRecorder)
+            _continuousRecorder->printSummary();
+        LOG_INFO_STREAM("PSD_recorder_queue high_water=" << _highWater
+                        << "/" << _queueCapacity
+                        << " overruns=" << _queueOverruns.load());
+    }
+
+private:
+    void stopAndDrainNoThrow() noexcept
+    {
+        {
+            std::lock_guard<std::mutex> lock(_mutex);
+            _stopRequested = true;
+        }
+        _cv.notify_one();
+        if (_worker.joinable())
+            _worker.join();
+    }
+
+    void run() noexcept
+    {
+        try
+        {
+            for (;;)
+            {
+                PsdFrame *frame = nullptr;
+                {
+                    std::unique_lock<std::mutex> lock(_mutex);
+                    _cv.wait(lock, [this] {
+                        return _stopRequested || _queueCount != 0;
+                    });
+                    if (_queueCount == 0)
+                    {
+                        if (_stopRequested) break;
+                        continue;
+                    }
+                    // Keep this slot counted/in-use while processing it.  The
+                    // producer therefore cannot wrap around and overwrite it.
+                    frame = &_queue[_queueRead];
+                    _workerBusy.store(true, std::memory_order_release);
+                }
+
+                if (_continuousRecorder)
+                {
+                    _continuousRecorder->consume(*frame);
+                    _finished.store(_continuousRecorder->finished(),
+                                    std::memory_order_release);
+                }
+                else
+                {
+                    _detectorRecorder->consume(*frame);
+                    _eventInProgress.store(_detectorRecorder->eventInProgress(),
+                                           std::memory_order_release);
+                }
+                {
+                    std::lock_guard<std::mutex> lock(_mutex);
+                    if (++_queueRead == _queueCapacity) _queueRead = 0;
+                    --_queueCount;
+                    _queued.store(_queueCount, std::memory_order_release);
+                    _workerBusy.store(false, std::memory_order_release);
+                }
+            }
+        }
+        catch (...)
+        {
+            {
+                std::lock_guard<std::mutex> lock(_mutex);
+                _workerError = std::current_exception();
+            }
+            _workerBusy.store(false, std::memory_order_release);
+        }
+    }
+
+    static void copyFrame(PsdFrame &dst, const PsdFrame &src)
+    {
+        dst.frameIndex = src.frameIndex;
+        dst.centerSampleIndex = src.centerSampleIndex;
+        dst.timestampNs = src.timestampNs;
+        dst.gainDb = src.gainDb;
+        if (dst.powerDensity.size() != src.powerDensity.size())
+            dst.powerDensity.resize(src.powerDensity.size());
+        std::copy(src.powerDensity.begin(), src.powerDensity.end(),
+                  dst.powerDensity.begin());
+    }
+
+    const bool _continuous;
+    size_t _queueCapacity = 0;
+    std::unique_ptr<PsdDetectorRecorder> _detectorRecorder;
+    std::unique_ptr<ContinuousPsdRecorder> _continuousRecorder;
+    std::thread _worker;
+    mutable std::mutex _mutex;
+    std::condition_variable _cv;
+    std::vector<PsdFrame> _queue;
+    size_t _queueRead = 0;
+    size_t _queueWrite = 0;
+    size_t _queueCount = 0;
+    bool _stopRequested = false;
+    std::exception_ptr _workerError;
+    std::atomic<size_t> _queued{0};
+    std::atomic<bool> _workerBusy{false};
+    std::atomic<bool> _eventInProgress{false};
+    std::atomic<bool> _finished{false};
+    std::atomic<uint64_t> _queueOverruns{0};
+    size_t _highWater = 0;
+};
+
 std::string effectiveToml(const Config &c)
 {
     std::ostringstream o;
@@ -2806,8 +3023,7 @@ int main(int argc, char **argv)
 
         const uint64_t acquisitionStartNs = systemNowNs();
         dsp.psd().setStartTimestampNs(acquisitionStartNs);
-        std::unique_ptr<PsdDetectorRecorder> detector;
-        std::unique_ptr<ContinuousPsdRecorder> continuousRecorder;
+        std::unique_ptr<AsyncPsdRecorder> recorder;
 
         RecorderMetadata md;
         md.tomlText = effectiveToml(cfg);
@@ -2833,16 +3049,8 @@ int main(int argc, char **argv)
                 pendingPsdFrames.push_back(&f);
             });
 
-        if (cfg.recordingMode == "continuous")
-        {
-            continuousRecorder.reset(new ContinuousPsdRecorder(
-                cfg, dsp.psd().frequencies(), md));
-        }
-        else
-        {
-            detector.reset(new PsdDetectorRecorder(
-                cfg, dsp.psd().frequencies(), md));
-        }
+        recorder.reset(new AsyncPsdRecorder(
+            cfg, dsp.psd().frequencies(), md));
 
         const int actRet = dev->activateStream(rxStream);
         if (actRet != 0)
@@ -2851,17 +3059,18 @@ int main(int argc, char **argv)
         const auto wall0 = std::chrono::steady_clock::now();
 
         bool shutdownWaitAnnounced = false;
-        auto eventInProgress = [&detector]() -> bool {
-            return detector && detector->eventInProgress();
+        auto eventInProgress = [&recorder]() -> bool {
+            return recorder && recorder->eventInProgress();
         };
         auto gracefulStopMayExit = [&eventInProgress]() -> bool {
             return gStopRequested && (!eventInProgress() || gForceStopRequested);
         };
 
         while ((!finiteRun || totalInput < targetInput) &&
-               !(continuousRecorder && continuousRecorder->finished()) &&
+               !(recorder && recorder->finished()) &&
                !gracefulStopMayExit())
         {
+            recorder->throwIfFailed();
             if (gStopRequested && eventInProgress() && !shutdownWaitAnnounced)
             {
                 shutdownWaitAnnounced = true;
@@ -2973,16 +3182,17 @@ int main(int argc, char **argv)
             if (cfg.agcEnabled)
                 currentGain = agc.update(clippedComplex, got, double(got) / cfg.sampleRate);
 
-            // Detector and HDF5 work can be bursty at trigger ON because the
-            // recorder writes the pre-context backlog. Keep that work out of
-            // the Soapy direct-buffer hold interval so the SDR ring can be
-            // recycled before disk I/O starts.
+            // Detector/event/HDF5 work runs on the dedicated recorder thread.
+            // Copy completed PSD frames into its bounded queue and return to
+            // SDR acquisition without waiting for disk I/O.
             for (const PsdFrame *psdFrame : pendingPsdFrames)
             {
-                if (continuousRecorder)
-                    continuousRecorder->consume(*psdFrame);
-                else if (detector)
-                    detector->consume(*psdFrame);
+                if (!recorder->enqueue(*psdFrame))
+                {
+                    recorder->throwIfFailed();
+                    throw std::runtime_error(
+                        "PSD recorder queue overrun; acquisition stopped to preserve data integrity");
+                }
             }
 
             const auto d1 = std::chrono::steady_clock::now();
@@ -3005,17 +3215,13 @@ int main(int argc, char **argv)
         dev->closeStream(rxStream);
         rxStream = nullptr;
 
-        // Close/flush the recorder before printing final statistics or exiting.
-        // This is especially important after Ctrl-C/SIGTERM.
-        if (detector)
+        // Stop acquisition first, then drain every queued PSD frame and let the
+        // recorder thread finish/flush HDF5 before printing final statistics.
+        if (recorder)
         {
-            detector->printSummary();
-            detector.reset();
-        }
-        if (continuousRecorder)
-        {
-            continuousRecorder->printSummary();
-            continuousRecorder.reset();
+            recorder->stopAndDrain();
+            recorder->printSummary();
+            recorder.reset();
         }
 
         if (gStopRequested)

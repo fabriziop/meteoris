@@ -94,16 +94,12 @@ constexpr double DEFAULT_BANDWIDTH = 100e3;
 constexpr double DEFAULT_ATTENUATION_DB = 60.0;
 
 volatile std::sig_atomic_t gStopRequested = 0;
-volatile std::sig_atomic_t gForceStopRequested = 0;
 volatile std::sig_atomic_t gStopSignal = 0;
 
 extern "C" void meteorisSignalHandler(int signo)
 {
     gStopSignal = signo;
-    if (gStopRequested)
-        gForceStopRequested = 1;  // second signal: force immediate shutdown
-    else
-        gStopRequested = 1;       // first signal: finish current event
+    gStopRequested = 1;
 }
 
 void installSignalHandlers()
@@ -3058,26 +3054,11 @@ int main(int argc, char **argv)
         activated = true;
         const auto wall0 = std::chrono::steady_clock::now();
 
-        bool shutdownWaitAnnounced = false;
-        auto eventInProgress = [&recorder]() -> bool {
-            return recorder && recorder->eventInProgress();
-        };
-        auto gracefulStopMayExit = [&eventInProgress]() -> bool {
-            return gStopRequested && (!eventInProgress() || gForceStopRequested);
-        };
-
         while ((!finiteRun || totalInput < targetInput) &&
                !(recorder && recorder->finished()) &&
-               !gracefulStopMayExit())
+               !gStopRequested)
         {
             recorder->throwIfFailed();
-            if (gStopRequested && eventInProgress() && !shutdownWaitAnnounced)
-            {
-                shutdownWaitAnnounced = true;
-                LOG_INFO_STREAM("shutdown requested by signal " << int(gStopSignal)
-                                << ": waiting for current event and post-trigger context; "
-                                << "press Ctrl-C again to force stop");
-            }
             const size_t remaining = finiteRun ? (targetInput - totalInput) : streamMtu;
             const int8_t *iq = nullptr;
             size_t got = 0;
@@ -3098,7 +3079,7 @@ int main(int argc, char **argv)
                     got = std::min<size_t>(static_cast<size_t>(ret), remaining);
                     heldDirect = true;
                 }
-                else if (gracefulStopMayExit())
+                else if (gStopRequested)
                 {
                     break;
                 }
@@ -3132,7 +3113,7 @@ int main(int argc, char **argv)
                     iq = fallbackIq.data();
                     got = static_cast<size_t>(ret);
                 }
-                else if (gracefulStopMayExit())
+                else if (gStopRequested)
                 {
                     break;
                 }
@@ -3227,9 +3208,7 @@ int main(int argc, char **argv)
         if (gStopRequested)
         {
             LOG_INFO_STREAM("shutdown_signal=" << int(gStopSignal)
-                            << (gForceStopRequested
-                                    ? " (forced)"
-                                    : " (graceful, current event complete)"));
+                            << " (graceful; queued PSD frames drained)");
         }
 
         const double realtimeDuration = double(totalInput) / cfg.sampleRate;

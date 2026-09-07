@@ -465,6 +465,12 @@ def plot_event(
     formatter = mdates.ConciseDateFormatter(locator, tz=dt.timezone.utc)
     ax.xaxis.set_major_locator(locator)
     ax.xaxis.set_major_formatter(formatter)
+
+    # Show minor ticks on every data axis.  Because the two panels share X,
+    # configuring either X axis applies to both; tick_params below mirrors
+    # those minor ticks on the upper edge as well.
+    ax.minorticks_on()
+    ax_max_power.minorticks_on()
     # Repeat the shared time ticks and labels on the top edge of the stacked
     # max-PSD panel. The lower waterfall keeps the normal bottom labels.
     ax_max_power.tick_params(
@@ -521,6 +527,7 @@ def plot_event(
     ]
     cb = fig.colorbar(mesh, cax=cax)
     cb.set_label("PSD density (dB/Hz)")
+    cb.minorticks_on()
 
     # Mark every trigger ON/OFF transition. Retriggers that occur during the
     # post-trigger tail are intentionally merged into the same Meteoris event,
@@ -864,6 +871,34 @@ def build_arg_parser() -> argparse.ArgumentParser:
     return p
 
 
+
+def open_maximized(fig) -> None:
+    """Maximize an interactive Matplotlib window while retaining decorations.
+
+    Matplotlib window-manager APIs differ by GUI backend, so use the native
+    maximize operation exposed by common Qt/Tk backends.  Do not use the
+    fullscreen toggle: the normal title bar and window borders should remain
+    visible.  Headless/save-only operation never calls this.
+    """
+    try:
+        manager = fig.canvas.manager
+        window = getattr(manager, "window", None)
+        if window is None:
+            return
+
+        show_maximized = getattr(window, "showMaximized", None)
+        if callable(show_maximized):
+            show_maximized()
+            return
+
+        state = getattr(window, "state", None)
+        if callable(state):
+            state("zoomed")
+    except Exception:
+        # Window sizing is cosmetic; plotting/navigation must still work on
+        # backends that expose no supported maximize operation.
+        pass
+
 def main(argv: Iterable[str] | None = None) -> int:
     args = build_arg_parser().parse_args(argv)
     try:
@@ -939,6 +974,7 @@ def main(argv: Iterable[str] | None = None) -> int:
                         )
                     except Exception:
                         pass
+                    open_maximized(fig)
                     plt.show(block=True)
 
                     if navigation.get("quit"):

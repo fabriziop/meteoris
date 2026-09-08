@@ -15,7 +15,7 @@ parameters.
 
 Meteoris has currently been tested on Linux with the [HackRF One
 SDR](https://hackrf.readthedocs.io/en/latest/hackrf_one.html).
-Meteoris is currently at version 0.3.0 and should therefore be considered alpha
+Meteoris is currently at version 0.4.0 and should therefore be considered alpha
 software.
 
 ### Author's Note
@@ -295,9 +295,20 @@ through recorded events:
 - `Backspace/Delete`: edit jump number
 - `Esc`: clear jump number
 - `z`/`x`/`c`/`v`: skip by -20/-10/+10/+20 events
+- `n`: choose the HDF5 filename used to save selected event data with a file
+  chooser; no terminal input or Enter key is required
+- `w`: write/append the HDF5 data of the currently displayed event to the selected
+  save file; if `n` has not been used, the default is `meteoris_saved.h5`
 - `r`: refresh a live SWMR file
 - `q`: quit
 - close the window: quit
+
+Saved-event HDF5 files are created on the first `w` command and appended on
+subsequent `w` commands. They retain the Meteoris PSD datasets, frequency axis,
+and file metadata and can be opened again directly with `meteoris_plot`. Saved
+events are assigned sequential event IDs in the destination file. A destination
+with an incompatible frequency axis is rejected rather than mixed with the
+current data.
 
 The viewer also provides interactive PSD color-limit sliders and controls for
 the display:

@@ -1,7 +1,7 @@
 # Meteoris HDF5 recording format
 
 This document describes the HDF5 recording format currently written by
-**Meteoris 0.3.0**.
+**Meteoris 0.4.0**.
 
 The format identifier stored in each new file is:
 
@@ -248,7 +248,7 @@ This attribute describes the Meteoris format/application author.
 For the current software:
 
 ```text
-0.3.0
+0.4.0
 ```
 
 This records the Meteoris version that created the new HDF5 file.
@@ -1871,3 +1871,27 @@ the existing rule that a triggered event is never split across daily files.
 ---
 
 Copyright (c) 2026 Fabrizio Pollastri. Licensed under the GNU General Public License v3.0; see `LICENSE`.
+
+---
+
+# Saved event selections from `meteoris_plot`
+
+The interactive viewer can create a compact HDF5 file containing selected
+events from the displayed recording:
+
+- press `n` to choose the destination filename with a file chooser (no terminal input or Enter key required);
+- press `w` to write/append the currently displayed event;
+- if no filename has been chosen, the destination is `meteoris_saved.h5`.
+
+The first save creates the normal Meteoris `/metadata` and `/psd` structure and
+copies the source frequency axis and metadata. Later saves append rows to the
+same datasets. Each saved selection is assigned a new sequential `event_id` in
+the destination so separately selected events remain separate when the saved
+file is browsed again. The original timestamps, frame indices, detector state,
+detector metric, gain, and PSD density values are preserved.
+
+For consistency, `meteoris_plot` refuses to append an event if the destination
+file has a different PSD frequency axis. Files produced by this function are
+readable directly by `meteoris_plot` using the same event-discovery logic as
+normal Meteoris recording files.
+

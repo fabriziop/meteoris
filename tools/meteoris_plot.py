@@ -21,6 +21,8 @@ The program:
     - jumps to a typed event number when SPACE/ENTER is pressed;
     - refreshes a live SWMR file with the R key;
     - skips by -20/-10/+10/+20 events with Z/X/C/V;
+    - selects an HDF5 save file with N using a file chooser;
+    - saves the currently displayed event data to that file with W;
     - terminate the interactive browser with Q or by closing the window;
   - provides interactive PSD color-scale minimum/maximum sliders;
   - provides show/hide controls for the max-PSD trace, X/Y grid, and trigger markers;
@@ -40,7 +42,7 @@ Examples:
 
 from __future__ import annotations
 
-__version__ = "0.3.0"
+__version__ = "0.4.0"
 __author__ = "Fabrizio Pollastri <mxgbot@gmail.com>"
 
 
@@ -239,6 +241,123 @@ def open_meteoris_h5(path: Path) -> tuple[h5py.File, bool]:
         ) from exc
 
 
+
+def _copy_metadata_for_saved_file(src: h5py.File, dst: h5py.File) -> None:
+    """Copy Meteoris file-level metadata when creating a saved-event file."""
+    src_meta = src.get("metadata")
+    dst_meta = dst.require_group("metadata")
+    if src_meta is None:
+        return
+    for key, value in src_meta.attrs.items():
+        dst_meta.attrs[key] = value
+    if "toml_config" in src_meta and "toml_config" not in dst_meta:
+        src_meta.copy("toml_config", dst_meta)
+
+
+def _create_saved_event_datasets(dst: h5py.File, frequency_hz: np.ndarray) -> None:
+    psd = dst.require_group("psd")
+    if "frequency_hz" not in psd:
+        psd.create_dataset("frequency_hz", data=np.asarray(frequency_hz, dtype=np.float64))
+
+    nfreq = int(len(frequency_hz))
+    if "power_density" not in psd:
+        psd.create_dataset(
+            "power_density", shape=(0, nfreq), maxshape=(None, nfreq),
+            chunks=(128, nfreq), dtype=np.float32,
+        )
+    specs = {
+        "timestamp_ns": np.uint64,
+        "frame_index": np.uint64,
+        "event_id": np.uint64,
+        "detector_state": np.uint8,
+        "detector_max_db_hz": np.float32,
+        "gain_db": np.float32,
+    }
+    for name, dtype in specs.items():
+        if name not in psd:
+            psd.create_dataset(name, shape=(0,), maxshape=(None,), chunks=(1024,), dtype=dtype)
+
+
+def save_event_hdf5(src: h5py.File, ev: EventSegment, destination: Path) -> tuple[int, int]:
+    """Append one displayed event to a standalone Meteoris-compatible HDF5 file.
+
+    The saved file keeps the source frequency axis and metadata.  Saved events
+    receive new sequential event_id values so selections from different source
+    files cannot accidentally merge when viewed later.
+    """
+    destination = destination.expanduser()
+    try:
+        if Path(src.filename).resolve() == destination.resolve():
+            raise ValueError("save destination must be different from the source HDF5 file")
+    except OSError:
+        pass
+
+    refresh_live_datasets(src)
+    required = (
+        "/psd/frequency_hz", "/psd/power_density", "/psd/timestamp_ns",
+        "/psd/frame_index", "/psd/event_id", "/psd/detector_state",
+        "/psd/detector_max_db_hz", "/psd/gain_db",
+    )
+    for name in required:
+        if name not in src:
+            raise ValueError(f"cannot save event: source is missing {name}")
+
+    visible_stop = min(
+        ev.stop_row,
+        *(int(src[name].shape[0]) for name in required if name != "/psd/frequency_hz"),
+    )
+    if visible_stop <= ev.start_row:
+        raise ValueError("cannot save event: no fully published PSD rows are visible")
+
+    freq = np.asarray(src["/psd/frequency_hz"], dtype=np.float64)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    mode = "a" if destination.exists() else "w"
+    with h5py.File(destination, mode, libver="latest") as dst:
+        if mode == "w":
+            _copy_metadata_for_saved_file(src, dst)
+        _create_saved_event_datasets(dst, freq)
+
+        saved_freq = np.asarray(dst["/psd/frequency_hz"], dtype=np.float64)
+        if saved_freq.shape != freq.shape or not np.array_equal(saved_freq, freq):
+            raise ValueError(
+                f"cannot append to {destination}: frequency axis differs from the source file"
+            )
+
+        psd = dst["/psd"]
+        first = int(psd["power_density"].shape[0])
+        rows = int(visible_stop - ev.start_row)
+        last = first + rows
+
+        lengths = {name: int(psd[name].shape[0]) for name in (
+            "power_density", "timestamp_ns", "frame_index", "event_id",
+            "detector_state", "detector_max_db_hz", "gain_db",
+        )}
+        if len(set(lengths.values())) != 1:
+            raise ValueError(f"cannot append to {destination}: PSD dataset lengths are inconsistent")
+
+        existing_ids = psd["event_id"]
+        new_event_id = int(np.max(existing_ids[:])) + 1 if first else 1
+
+        for name in ("power_density", "timestamp_ns", "frame_index", "event_id",
+                     "detector_state", "detector_max_db_hz", "gain_db"):
+            ds = psd[name]
+            if name == "power_density":
+                ds.resize((last, ds.shape[1]))
+            else:
+                ds.resize((last,))
+
+        a, b = ev.start_row, visible_stop
+        psd["power_density"][first:last, :] = np.asarray(src["/psd/power_density"][a:b, :], dtype=np.float32)
+        psd["timestamp_ns"][first:last] = np.asarray(src["/psd/timestamp_ns"][a:b], dtype=np.uint64)
+        psd["frame_index"][first:last] = np.asarray(src["/psd/frame_index"][a:b], dtype=np.uint64)
+        psd["event_id"][first:last] = np.uint64(new_event_id)
+        psd["detector_state"][first:last] = np.asarray(src["/psd/detector_state"][a:b], dtype=np.uint8)
+        psd["detector_max_db_hz"][first:last] = np.asarray(src["/psd/detector_max_db_hz"][a:b], dtype=np.float32)
+        psd["gain_db"][first:last] = np.asarray(src["/psd/gain_db"][a:b], dtype=np.float32)
+        dst.flush()
+
+    return new_event_id, rows
+
 def infer_frame_period_ns(h5: h5py.File, timestamps: np.ndarray) -> int | None:
     """Estimate PSD frame spacing for restart/gap detection."""
     if len(timestamps) >= 2:
@@ -401,6 +520,7 @@ def plot_event(
     db_max: float | None,
     save_dir: Path | None,
     plot_cfg: PlotConfig,
+    save_state: dict[str, Path] | None = None,
 ) -> tuple[plt.Figure, dict[str, bool]]:
     refresh_live_datasets(h5)
     freq_hz = np.asarray(h5["/psd/frequency_hz"], dtype=float)
@@ -659,6 +779,8 @@ def plot_event(
     #   SHIFT+SPACE/SHIFT+ENTER    -> previous event
     #   digits + SPACE/ENTER       -> jump to that file-local event number
     #   Z / X / C / V              -> skip by -20 / -10 / +10 / +20 events
+    #   O                          -> set HDF5 file used by S
+    #   S                          -> save current event data to HDF5
     #   R                          -> refresh a live SWMR file
     #   Q                          -> quit interactive browsing
     # Closing the window normally also stops interactive browsing.
@@ -787,6 +909,46 @@ def plot_event(
             navigation["quit"] = True
             navigation["digits"] = ""
             plt.close(fig)
+            return
+
+        if key_l == "n":
+            if save_state is None:
+                return
+            current = Path(save_state.get("path", Path("meteoris_saved.h5"))).expanduser()
+            try:
+                import tkinter as tk
+                from tkinter import filedialog
+
+                root = tk.Tk()
+                root.withdraw()
+                root.attributes("-topmost", True)
+                chosen = filedialog.asksaveasfilename(
+                    parent=root,
+                    title="Select Meteoris HDF5 save file",
+                    initialdir=str(current.parent if str(current.parent) else Path.cwd()),
+                    initialfile=current.name,
+                    defaultextension=".h5",
+                    filetypes=[("HDF5 files", "*.h5"), ("All files", "*")],
+                )
+                root.destroy()
+            except Exception as exc:
+                print(f"Unable to open save-file chooser: {exc}", file=sys.stderr)
+                return
+            if chosen:
+                save_state["path"] = Path(chosen).expanduser()
+                print(f"HDF5 save file: {save_state['path']}")
+            return
+
+        if key_l == "w":
+            destination = (save_state or {}).get("path", Path("meteoris_saved.h5"))
+            try:
+                saved_id, saved_rows = save_event_hdf5(h5, ev, destination)
+                print(
+                    f"Saved event {ev.ordinal} to {destination} "
+                    f"as event_id={saved_id} rows={saved_rows}"
+                )
+            except (OSError, ValueError, KeyError) as exc:
+                print(f"Error saving event to {destination}: {exc}", file=sys.stderr)
             return
 
         if key_l == "r":
@@ -948,17 +1110,18 @@ def main(argv: Iterable[str] | None = None) -> int:
                     fig, _navigation = plot_event(
                         h5, events[n - 1], len(events), cmap,
                         effective_db_min, effective_db_max,
-                        args.save_dir, plot_cfg
+                        args.save_dir, plot_cfg, None
                     )
                     plt.close(fig)
             else:
                 print(
                     "Press SPACE or ENTER for next event. Type an event number then SPACE/ENTER to jump; "
                     "SHIFT+SPACE or SHIFT+ENTER goes back one event; "
-                    "Z/X/C/V skip by -20/-10/+10/+20 events; R refreshes a live SWMR file; "
-                    "Q quits; Backspace edits, Esc clears. "
+                    "Z/X/C/V skip by -20/-10/+10/+20 events; O sets the HDF5 save file; "
+                    "S saves the current event data; R refreshes a live SWMR file; Q quits; Backspace edits, Esc clears. "
                     "Close the window to stop."
                 )
+                save_state = {"path": Path("meteoris_saved.h5")}
                 pos = 0
                 selected_pos = {event_no: i for i, event_no in enumerate(selected)}
                 while 0 <= pos < len(selected):
@@ -966,7 +1129,7 @@ def main(argv: Iterable[str] | None = None) -> int:
                     fig, navigation = plot_event(
                         h5, events[n - 1], len(events), cmap,
                         effective_db_min, effective_db_max,
-                        args.save_dir, plot_cfg
+                        args.save_dir, plot_cfg, save_state
                     )
                     try:
                         fig.canvas.manager.set_window_title(

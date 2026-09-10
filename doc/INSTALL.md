@@ -10,51 +10,7 @@ repository](https://github.com/fabriziop/meteoris).
 
 ### Repository layout
 
-```text
-meteoris/
-├── CMakeLists.txt
-├── build.sh
-├── install.sh
-├── run_sim.sh
-├── src/
-│   ├── meteoris.cpp
-│   └── detector/
-│       ├── detector.hpp
-│       ├── detector_registry.cpp
-│       └── peak_tracker_detector.cpp
-├── sim/
-│   ├── CMakeLists.txt
-│   └── SoapyMeteorisSim.cpp
-├── tools/
-│   └── meteoris_plot.py
-├── config/
-│   ├── meteoris.toml
-│   ├── meteoris_sim.toml
-│   └── meteoris_plot.toml
-├── doc/
-│   ├── CONFIG_FILE_REFERENCE.md
-│   ├── DETAILED_FEATURES.md
-│   ├── DETECTOR.md
-│   ├── DETECTOR_PLUGIN_API.md
-│   ├── DSP_PIPELINE.md
-│   ├── INSTALL.md
-│   ├── RECORDING_FORMAT.md
-│   └── event.png
-├── README.md
-└── LICENSE
-```
-
-The main executable remains in `src/meteoris.cpp`. Detector algorithms are
-separated behind the phase-1 detector interface in `src/detector/`; the
-currently registered implementation is `peak_tracker_detector.cpp`.
-
-The SoapySDR test device is built from `sim/`, while `tools/` contains the
-Python event viewer. `run_sim.sh` runs against the freshly built in-tree
-simulator plugin, and `install.sh` supports local or system installation.
-
-The generated `build/` directory is intentionally out of source and is not
-part of the repository layout above.
-
+See [Repository Layout](REPOSITORY_LAYOUT.md) for the current source-tree structure and component overview.
 
 ## Kubuntu/Ubuntu
 

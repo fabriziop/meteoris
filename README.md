@@ -44,6 +44,9 @@ Without AI, this project probably would not exist.
   * SDR simulator that generates synthetic meteor-scatter radio signals
     for testing and calibration.
 
+**For the impatient: see the [Meteoris Cheat Sheet](doc/CHEATSHEET.md) for the
+short path from build and configuration to recording and viewing events.**
+
 
 # [Download, Build and Install](doc/INSTALL.md)
 

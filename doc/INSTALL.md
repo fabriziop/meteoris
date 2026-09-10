@@ -1,21 +1,7 @@
 # Download, Build and Install
 
-## Kubuntu/Ubuntu build dependencies
+Meteoris can be bult and installed on X86 and ARM platforms.
 
-First, comply with the following dependencies installing the required
-packages as follows.
-
-```bash
-sudo apt update
-sudo apt install \
-    build-essential cmake pkg-config \
-    libsoapysdr-dev soapysdr-tools \
-    libhdf5-dev libspdlog-dev \
-    python3-numpy python3-matplotlib python3-h5py
-```
-
-Python 3.11+ supplies `tomllib`. On older Python versions, install `tomli`
-or adapt the plotting tool accordingly.
 
 ## Getting Meteoris
 
@@ -69,7 +55,28 @@ simulator plugin, and `install.sh` supports local or system installation.
 The generated `build/` directory is intentionally out of source and is not
 part of the repository layout above.
 
-## Build
+
+## Kubuntu/Ubuntu
+
+### Build Dependencies
+
+First, comply with the following dependencies installing the required
+packages as follows.
+
+```bash
+sudo apt update
+sudo apt install \
+    build-essential cmake pkg-config \
+    libsoapysdr-dev soapysdr-tools \
+    libhdf5-dev libspdlog-dev \
+    python3-numpy python3-matplotlib python3-h5py
+```
+
+Python 3.11+ supplies `tomllib`. On older Python versions, install `tomli`
+or adapt the plotting tool accordingly.
+
+
+### Build
 
 ```bash
 ./build.sh
@@ -103,6 +110,118 @@ Disable the simulator if only the recorder is needed:
 ```bash
 ./build.sh -DMETEORIS_BUILD_SIM=OFF
 ```
+
+## Raspberry Pi with Raspberry Pi OS Trixie
+
+Two supported workflows are available:
+
+- Native build directly on the Raspberry Pi.
+- Cross-build on a faster x86_64 Linux host.
+
+### Native build on the Pi
+
+Install dependencies according to the build mode.
+
+Full build (recorder + plotting tool):
+
+```bash
+sudo apt update
+sudo apt install \
+        build-essential cmake pkg-config \
+        libsoapysdr-dev soapysdr-tools \
+        libhdf5-dev libspdlog-dev libfftw3-dev \
+        python3-numpy python3-matplotlib python3-h5py
+```
+
+Recorder-only build (no plotting tool):
+
+```bash
+sudo apt update
+sudo apt install \
+    build-essential cmake pkg-config \
+    libsoapysdr-dev soapysdr-tools \
+    libhdf5-dev libspdlog-dev libfftw3-dev
+```
+
+Then configure and build:
+
+```bash
+./build_rpi3.sh
+```
+
+`build_rpi3.sh` first checks local hardware/OS; on a Raspberry Pi it selects
+the native preset even if `RPI_SYSROOT` is set in the environment.
+
+### Cross-build for Pi 3B (aarch64)
+
+On the host machine, install aarch64 cross tools:
+
+```bash
+sudo apt update
+sudo apt install \
+        cmake make pkg-config \
+        gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+```
+
+For cross builds, Python plotting dependencies are only required in the target
+sysroot when using the full build mode.
+
+Create or sync a Raspberry Pi sysroot that includes target runtime and
+development libraries (SoapySDR, HDF5, spdlog, FFTW and their dependencies).
+
+Set the sysroot path and run the Pi preset:
+
+```bash
+export RPI_SYSROOT=/opt/sysroots/rpi-trixie-aarch64
+./build_rpi3.sh
+```
+
+When `RPI_SYSROOT` is set, `build_rpi3.sh` automatically uses a cross-build
+preset.
+
+You can force behavior explicitly:
+
+```bash
+./build_rpi3.sh --native
+export RPI_SYSROOT=/opt/sysroots/rpi-trixie-aarch64
+./build_rpi3.sh --cross
+```
+
+If neither condition is met (not running on a Raspberry Pi and no
+`RPI_SYSROOT`), the script stops with a clear error message.
+
+`build_rpi3.sh` asks which build you want:
+
+- full build: `meteoris` + `meteoris_plot`
+- recorder-only build: `meteoris` only
+
+You can also select the preset directly:
+
+```bash
+export RPI_SYSROOT=/opt/sysroots/rpi-trixie-aarch64
+cmake --preset rpi3-aarch64-cross-release-full
+cmake --build --preset rpi3-aarch64-cross-release-full
+
+cmake --preset rpi3-aarch64-cross-release-recorder-only
+cmake --build --preset rpi3-aarch64-cross-release-recorder-only
+
+cmake --preset rpi3-native-release-full
+cmake --build --preset rpi3-native-release-full
+
+cmake --preset rpi3-native-release-recorder-only
+cmake --build --preset rpi3-native-release-recorder-only
+```
+
+The cross preset intentionally uses:
+
+- `METEORIS_NATIVE_OPTIMIZATION=OFF` to avoid `-march=native` on the host.
+- `METEORIS_CPU_TUNE=cortex-a53` for Raspberry Pi 3B class CPUs.
+- `METEORIS_BUILD_SIM=OFF` to avoid installing/testing a host-incompatible
+    SoapySDR plugin in cross-build output.
+- `METEORIS_INSTALL_PLOT=OFF` in recorder-only mode.
+
+You can then deploy `build-rpi3-aarch64/meteoris` to the Pi together with the
+runtime configuration files.
 
 ## Install
 
@@ -171,4 +290,5 @@ directory, preventing an older installed `meteoris_sim` module from being used.
 
 ---
 
-Copyright (c) 2026 Fabrizio Pollastri. Licensed under the GNU General Public License v3.0; see `LICENSE`.
+Copyright (c) 2026 Fabrizio Pollastri. Licensed under the GNU General Public
+License v3.0; see `LICENSE`.

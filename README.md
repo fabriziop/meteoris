@@ -13,9 +13,10 @@ available. It synthesizes typical meteor-scatter radio signals that can be
 recorded by Meteoris and is useful for adjusting critical receiver and detector
 parameters.
 
-Meteoris has currently been tested on Linux with the [HackRF One
+Meteoris has currently been tested on Ubuntu/Linux on X86 and on
+Pi OS trixie on Raspberry Pi 3B both with the [HackRF One
 SDR](https://hackrf.readthedocs.io/en/latest/hackrf_one.html).
-Meteoris is currently at version 0.4.0 and should therefore be considered alpha
+Meteoris is currently at version 0.5.0 and should therefore be considered alpha
 software.
 
 ### Author's Note
@@ -29,6 +30,7 @@ Without AI, this project probably would not exist.
 # Main Features
 
   * Supports SDR receivers available through SoapySDR.
+  * Supports X86 and ARM platforms
   * Fully configurable through a file or command-line options.
   * Continuous **10 Msps** input.
   * Final selectable **100 kHz observation band**.
@@ -112,7 +114,8 @@ receiver frequency error.
 
 For example, to receive the GRAVES transmitter at 143.050 MHz, move the DC
 spur approximately 1 MHz up away from the signal and compensate for a receiver
-frequency error of about -1.35 kHz, the center frequency is raised by 1 MHz and the shift frequency is set to the sum of the raised quantity (+1000000) and
+frequency error of about -1.35 kHz, the center frequency is raised by 1 MHz and
+the shift frequency is set to the sum of the raised quantity (+1000000) and
 the -1.35 kHz compensation (+998650 Hz). See the configuration below.
 
 ``` 
@@ -261,8 +264,8 @@ run as a daemon detached from the terminal:
 meteoris --daemon
 ```
 
-If the **`[output]`** section is left unchanged, recorded data is written to the
-**`data`** subdirectory. Files are rotated daily and named
+If the **`[output]`** section is left unchanged, recorded data is written to
+the **`data`** subdirectory. Files are rotated daily and named
 **`meteoris_YYYYMMDD.h5`**, where `YYYY` is the year, `MM` the month, and `DD`
 the day.
 
@@ -270,7 +273,8 @@ Recording can also be continuous, in which case detector triggers are ignored.
 This mode is useful for testing and debugging. See
 [Recording Modes](#recording-modes) below.
 
-If meteoris fails to open an existing output file after an ungracefull termination, like program kill/crash or system shutdown/crash, there exists a
+If meteoris fails to open an existing output file after an ungracefull
+termination, like program kill/crash or system shutdown/crash, there exists a
 set of specific tools for output file recovering. See all instuctions in
 [Recover HDF5 Output Files](./doc/RECOVER_HDF5.md). 
 
@@ -354,8 +358,8 @@ each configurable period:
 1. a near-zero stationary echo with linear rise, hold and gradual fade;
 2. one spectrally clean descending linear chirp at a separate time.
 
-Noise, amplitudes, timing, stationary offset, and chirp endpoints are configurable
-in `[simulator]` inside `config/meteoris_sim.toml`.
+Noise, amplitudes, timing, stationary offset, and chirp endpoints are
+configurable in `[simulator]` inside `config/meteoris_sim.toml`.
 
 Typical defaults are:
 

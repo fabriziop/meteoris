@@ -1,0 +1,86 @@
+{
+  "version": 3,
+  "configurePresets": [
+    {
+      "name": "linux-native-release",
+      "displayName": "Linux Native Release",
+      "generator": "Unix Makefiles",
+      "binaryDir": "${sourceDir}/build",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "METEORIS_NATIVE_OPTIMIZATION": "ON",
+        "METEORIS_FAST_MATH": "ON",
+        "METEORIS_BUILD_SIM": "ON"
+      }
+    },
+    {
+      "name": "rpi3-native-release-full",
+      "displayName": "Raspberry Pi 3B Trixie (native, full)",
+      "inherits": "linux-native-release",
+      "binaryDir": "${sourceDir}/build-rpi3-native",
+      "cacheVariables": {
+        "METEORIS_CPU_TUNE": "cortex-a53",
+        "METEORIS_INSTALL_PLOT": "ON",
+        "METEORIS_BUILD_SIM": "ON"
+      }
+    },
+    {
+      "name": "rpi3-native-release-recorder-only",
+      "displayName": "Raspberry Pi 3B Trixie (native, recorder-only)",
+      "inherits": "rpi3-native-release-full",
+      "binaryDir": "${sourceDir}/build-rpi3-native-recorder-only",
+      "cacheVariables": {
+        "METEORIS_INSTALL_PLOT": "OFF",
+        "METEORIS_BUILD_SIM": "OFF"
+      }
+    },
+    {
+      "name": "rpi3-aarch64-cross-release-full",
+      "displayName": "Raspberry Pi 3B Trixie (aarch64 cross, full)",
+      "generator": "Unix Makefiles",
+      "binaryDir": "${sourceDir}/build-rpi3-aarch64",
+      "cacheVariables": {
+        "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/cmake/toolchains/rpi3-trixie-aarch64.cmake",
+        "RPI_SYSROOT": "$env{RPI_SYSROOT}",
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_INSTALL_PREFIX": "/usr/local",
+        "METEORIS_NATIVE_OPTIMIZATION": "OFF",
+        "METEORIS_CPU_TUNE": "cortex-a53",
+        "METEORIS_FAST_MATH": "ON",
+        "METEORIS_BUILD_SIM": "OFF",
+        "METEORIS_INSTALL_PLOT": "ON"
+      }
+    },
+    {
+      "name": "rpi3-aarch64-cross-release-recorder-only",
+      "displayName": "Raspberry Pi 3B Trixie (aarch64 cross, recorder-only)",
+      "inherits": "rpi3-aarch64-cross-release-full",
+      "binaryDir": "${sourceDir}/build-rpi3-aarch64-recorder-only",
+      "cacheVariables": {
+        "METEORIS_INSTALL_PLOT": "OFF"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "linux-native-release",
+      "configurePreset": "linux-native-release"
+    },
+    {
+      "name": "rpi3-native-release-full",
+      "configurePreset": "rpi3-native-release-full"
+    },
+    {
+      "name": "rpi3-native-release-recorder-only",
+      "configurePreset": "rpi3-native-release-recorder-only"
+    },
+    {
+      "name": "rpi3-aarch64-cross-release-full",
+      "configurePreset": "rpi3-aarch64-cross-release-full"
+    },
+    {
+      "name": "rpi3-aarch64-cross-release-recorder-only",
+      "configurePreset": "rpi3-aarch64-cross-release-recorder-only"
+    }
+  ]
+}

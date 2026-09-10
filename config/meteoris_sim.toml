@@ -134,7 +134,7 @@ time_mean_psds = 3
 
 # A spectral local maximum becomes a candidate when the doubly-smoothed PSD is
 # this many dB above the current whole-band MEDIAN background.
-peak_threshold_db = 5.0
+peak_threshold_db = 8.0
 
 # Nearby local maxima are consolidated by keeping the strongest peak.
 min_peak_separation_hz = 300
@@ -173,8 +173,8 @@ max_drift_hz_s = 1000
 [detector.chirp]
 enabled = true
 # Chirps may occur across the complete observation band.
-min_hz = -50000
-max_hz = 50000
+min_hz = -49000
+max_hz = 49000
 # Matching window around the predicted frequency.
 max_df_hz = 1500
 activation_time_s = 0.05

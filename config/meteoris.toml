@@ -2,15 +2,16 @@
 # Command-line options override values in this file.
 
 [sdr]
-driver = "hackrf-htime"
+driver = "hackrf"
 sample_rate = 10000000
 # Set to 0 to leave frequency unchanged by Meteoris.
-center_frequency = 144050000
+center_frequency = 143760000
 # Initial gain. When AGC is enabled this is the starting value.
 gain = 90
 
 [dsp]
-shift_hz = +998650
+# off center shift - SDR compensation: +710000 - 1350 = +708650
+shift_hz = +708650
 decimation_stage1 = 8
 decimation_stage2 = 5
 bandwidth_hz = 100000
@@ -103,7 +104,7 @@ time_mean_psds = 3
 
 # A spectral local maximum becomes a candidate when the doubly-smoothed PSD is
 # this many dB above the current whole-band MEDIAN background.
-peak_threshold_db = 5.0
+peak_threshold_db = 8.0
 
 # Nearby local maxima are consolidated by keeping the strongest peak.
 min_peak_separation_hz = 300
@@ -113,7 +114,7 @@ min_peak_separation_hz = 300
 max_peaks_per_psd = 20
 
 # 0 disables periodic detector diagnostics.
-diagnostic_interval_s = 1.0
+diagnostic_interval_s = 0
 
 # Common recording context around the transition of active-track count 0 <-> >0.
 pre_context_s = 0.5
@@ -132,7 +133,7 @@ max_hz = 5000
 # Maximum frequency error for association to the last stationary position.
 max_df_hz = 250
 # Tentative track must reach this age and occupancy before becoming active.
-activation_time_s = 0.5
+activation_time_s = 0.1
 activation_fraction = 0.50
 # Active/tentative stationary track survives gaps up to this time.
 lost_s = 0.30
@@ -142,8 +143,8 @@ max_drift_hz_s = 1000
 [detector.chirp]
 enabled = true
 # Chirps may occur across the complete observation band.
-min_hz = -50000
-max_hz = 50000
+min_hz = -49000
+max_hz = 49000
 # Matching window around the predicted frequency.
 max_df_hz = 1500
 activation_time_s = 0.05
@@ -216,3 +217,4 @@ max_growth_mb_per_min = 100
 # Stop Meteoris when available space on the output filesystem falls below this value.
 # 0 disables the free-space safety check.
 min_free_space_gb = 2
+

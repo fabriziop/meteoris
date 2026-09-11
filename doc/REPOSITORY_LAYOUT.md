@@ -27,7 +27,8 @@ meteoris/
 ├── tests/
 │   └── echoes_automatic_detector_test.cpp
 ├── tools/
-│   └── meteoris_plot.py
+│   ├── meteoris_plot.py
+│   └── meteoris_recover_hdf5.py
 ├── config/
 │   ├── meteoris.toml
 │   ├── meteoris_plot.toml
@@ -56,7 +57,7 @@ compile time; the repository currently includes `peak_tracker` and
 embedded radix-2 implementation and optional FFTW support.
 
 The SoapySDR test device is built from `sim/`, `tests/` contains detector tests,
-and `tools/` contains the Python event viewer. Raspberry Pi native/cross-build
+and `tools/` contains the Python event viewer and HDF5 crash-recovery helper. Raspberry Pi native/cross-build
 support is provided by `build_rpi3.sh`, `CMakePresets.json`, and the toolchain in
 `cmake/toolchains/`. `run_sim.sh` runs against the freshly built in-tree
 simulator plugin, and `install.sh` supports local or system installation.

@@ -21,7 +21,8 @@
       "cacheVariables": {
         "METEORIS_CPU_TUNE": "cortex-a53",
         "METEORIS_INSTALL_PLOT": "ON",
-        "METEORIS_BUILD_SIM": "ON"
+        "METEORIS_BUILD_SIM": "ON",
+        "METEORIS_INSTALL_RECOVER_HDF5": "ON"
       }
     },
     {
@@ -31,7 +32,8 @@
       "binaryDir": "${sourceDir}/build-rpi3-native-recorder-only",
       "cacheVariables": {
         "METEORIS_INSTALL_PLOT": "OFF",
-        "METEORIS_BUILD_SIM": "OFF"
+        "METEORIS_BUILD_SIM": "OFF",
+        "METEORIS_INSTALL_RECOVER_HDF5": "ON"
       }
     },
     {
@@ -48,7 +50,8 @@
         "METEORIS_CPU_TUNE": "cortex-a53",
         "METEORIS_FAST_MATH": "ON",
         "METEORIS_BUILD_SIM": "OFF",
-        "METEORIS_INSTALL_PLOT": "ON"
+        "METEORIS_INSTALL_PLOT": "ON",
+        "METEORIS_INSTALL_RECOVER_HDF5": "ON"
       }
     },
     {
@@ -57,7 +60,8 @@
       "inherits": "rpi3-aarch64-cross-release-full",
       "binaryDir": "${sourceDir}/build-rpi3-aarch64-recorder-only",
       "cacheVariables": {
-        "METEORIS_INSTALL_PLOT": "OFF"
+        "METEORIS_INSTALL_PLOT": "OFF",
+        "METEORIS_INSTALL_RECOVER_HDF5": "ON"
       }
     }
   ],

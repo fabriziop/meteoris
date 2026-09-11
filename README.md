@@ -8,7 +8,9 @@ It consists of a capture/recording program (`meteoris`) that continuously
 listens for incoming signals and saves them to a file when a meteor signal is
 detected. The other main component is a plotting program (`meteoris_plot`) that
 reads recorded meteor-signal events from a file and displays them one at a time
-as horizontal waterfall diagrams. A SoapySDR simulator driver is also
+as horizontal waterfall diagrams. The suite also includes
+`meteoris_recover_hdf5`, a conservative recovery helper for HDF5 files left
+unreadable after a crash, forced termination, or power loss. A SoapySDR simulator driver is also
 available. It synthesizes typical meteor-scatter radio signals that can be
 recorded by Meteoris and is useful for adjusting critical receiver and detector
 parameters.
@@ -16,7 +18,7 @@ parameters.
 Meteoris has currently been tested on Ubuntu/Linux on X86 and on
 Pi OS trixie on Raspberry Pi 3B both with the [HackRF One
 SDR](https://hackrf.readthedocs.io/en/latest/hackrf_one.html).
-Meteoris is currently at version 0.5.0 and should therefore be considered alpha
+Meteoris is currently at version 0.5.1 and should therefore be considered alpha
 software.
 
 ### Author's Note
@@ -37,6 +39,7 @@ Without AI, this project probably would not exist.
   * Pluggable meteor signal detectors, including peak/track and
     Echoes-style automatic threshold detection.
   * Efficient HDF5 storage format for meteor-event data.
+  * Conservative `meteoris_recover_hdf5` helper for files left uncleanly closed.
   * Event-list display with details for each event.
   * Interactive event display with a time/frequency waterfall, an optional
     per-time-column maximum-PSD trace, shared time axes, and signal level
@@ -49,6 +52,17 @@ short path from build and configuration to recording and viewing events.**
 
 
 # [Download, Build and Install](doc/INSTALL.md)
+
+The Raspberry Pi build helper offers two modes. Both include the HDF5 recovery
+command:
+
+- **Full:** `meteoris` + `meteoris_plot` + `meteoris_recover_hdf5`
+- **Recorder-only:** `meteoris` + `meteoris_recover_hdf5`
+
+The recorder-only mode omits the plotting tool and simulator, but deliberately
+keeps `meteoris_recover_hdf5` so a headless recorder can recover files after an
+unclean shutdown. See [INSTALL.md](doc/INSTALL.md) for native and cross-build
+details.
 
 
 # Set Meteoris Configuration
@@ -276,10 +290,18 @@ Recording can also be continuous, in which case detector triggers are ignored.
 This mode is useful for testing and debugging. See
 [Recording Modes](#recording-modes) below.
 
-If meteoris fails to open an existing output file after an ungracefull
-termination, like program kill/crash or system shutdown/crash, there exists a
-set of specific tools for output file recovering. See all instuctions in
-[Recover HDF5 Output Files](./doc/RECOVER_HDF5.md). 
+If Meteoris fails to open an existing output file after an ungraceful
+termination such as a process crash, forced kill, or system shutdown, recover
+a copy conservatively with:
+
+```bash
+meteoris_recover_hdf5 data/meteoris_YYYYMMDD.h5
+```
+
+The original file is never modified. The helper clears only a detected stale
+HDF5 writer flag and uses `h5clear --increment` only when an EOA/EOF mismatch
+is confirmed. See [Recover HDF5 Output Files](./doc/RECOVER_HDF5.md) for the
+manual procedure, validation steps, and stop conditions.
 
 
 # Display Recorded Data

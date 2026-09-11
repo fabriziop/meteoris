@@ -55,8 +55,8 @@ while (($#)); do
 done
 
 echo "Select Raspberry Pi build mode:"
-echo "  1) Full build (meteoris + meteoris_plot)"
-echo "  2) Recorder-only build (meteoris only)"
+echo "  1) Full build (meteoris + meteoris_plot + meteoris_recover_hdf5)"
+echo "  2) Recorder-only build (meteoris + meteoris_recover_hdf5)"
 read -r -p "Choice [1/2]: " choice
 
 case "${choice}" in

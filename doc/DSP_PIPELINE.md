@@ -43,7 +43,7 @@ native interleaved CS8 I,Q
 +-------------------------------+
 | Welch PSD                     |
 | Hann window                   |
-| radix-2 FFT                   |
+| FFT backend                   |
 | 50% overlap                   |
 +-------------------------------+
         |
@@ -781,14 +781,33 @@ window.
 
 ---
 
-# 22. Radix-2 FFT
+# 22. FFT backend
 
-Meteoris contains its own in-place radix-2 FFT implementation,
-`Radix2Fft`.
+Meteoris uses a common FFT backend abstraction for the Welch PSD stage. Two
+implementations are available:
 
-Consequently the DSP path does not require an external FFT library.
+- `fftw3f`: the optional single-precision FFTW backend;
+- `radix2`: Meteoris' embedded in-place radix-2 implementation.
 
-The FFT size must be a power of two.
+CMake enables `METEORIS_USE_FFTW` by default. If FFTW3f is found at configure
+time, Meteoris is built with FFTW support and `createFftBackend()` selects the
+FFTW backend. If FFTW is disabled or cannot be found, the build falls back to
+the embedded radix-2 backend. A build with FFTW support also falls back to
+`Radix2Fft` if creation of the FFTW backend fails at runtime.
+
+The active backend name is reported as `fftw3f` or `radix2`. Backend selection
+does not change the surrounding DSP pipeline: both implementations consume the
+same Hann-windowed complex floating-point block and feed the same bin mapping,
+PSD normalization, detector, and recording logic.
+
+The configured FFT size is required to be a power of two by Meteoris. This is
+required by the embedded radix-2 implementation and keeps the DSP configuration
+valid regardless of which backend is selected.
+
+No external FFT library is therefore mandatory: FFTW is an optional optimized
+backend, while the embedded radix-2 implementation provides the fallback. When
+available, FFTW is recommended for performance; measured performance notes are
+kept in the README.
 
 The FFT operates on complex floating-point values produced by the final
 decimator.
@@ -1200,7 +1219,7 @@ the chain is approximately:
 250,000 complex samples/s
         |
         | Hann 4096
-        | radix-2 FFT
+        | FFT backend
         | hop 2048
         v
 ~122.07 PSD frames/s

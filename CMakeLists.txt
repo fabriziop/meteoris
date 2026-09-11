@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.16)
 
 project(Meteoris
-    VERSION 0.5.0
+    VERSION 0.5.1
     DESCRIPTION "Real-time SDR meteor detector, recorder and simulator"
     LANGUAGES C CXX
 )
@@ -11,6 +11,7 @@ option(METEORIS_NATIVE_OPTIMIZATION "Optimize generated code for the build host 
 option(METEORIS_FAST_MATH "Enable fast floating-point math for DSP kernels" ON)
 option(METEORIS_USE_FFTW "Use FFTW3 for FFT instead of internal Radix-2 FFT" ON)
 option(METEORIS_INSTALL_PLOT "Install the meteoris_plot viewer tool" ON)
+option(METEORIS_INSTALL_RECOVER_HDF5 "Install the meteoris_recover_hdf5 recovery tool" ON)
 set(METEORIS_CPU_TUNE "" CACHE STRING "Optional CPU tuning value used as -mcpu=<value>")
 
 if(CMAKE_CROSSCOMPILING AND METEORIS_NATIVE_OPTIMIZATION)
@@ -170,6 +171,25 @@ endif()
 
 include(GNUInstallDirs)
 
+# The recovery helper is part of every normal build mode unless explicitly
+# disabled.  Copy it into the build directory so recorder-only deployments get
+# the command too; installation still places it in <prefix>/bin.
+if(METEORIS_INSTALL_RECOVER_HDF5)
+    set(METEORIS_RECOVER_HDF5_BUILD_PATH
+        "${CMAKE_BINARY_DIR}/meteoris_recover_hdf5")
+    add_custom_command(
+        OUTPUT "${METEORIS_RECOVER_HDF5_BUILD_PATH}"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${CMAKE_SOURCE_DIR}/tools/meteoris_recover_hdf5.py"
+                "${METEORIS_RECOVER_HDF5_BUILD_PATH}"
+        DEPENDS "${CMAKE_SOURCE_DIR}/tools/meteoris_recover_hdf5.py"
+        COMMENT "Preparing meteoris_recover_hdf5"
+        VERBATIM
+    )
+    add_custom_target(meteoris_recover_hdf5_tool ALL
+        DEPENDS "${METEORIS_RECOVER_HDF5_BUILD_PATH}")
+endif()
+
 install(TARGETS meteoris
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
     COMPONENT meteoris_runtime
@@ -181,6 +201,16 @@ if(METEORIS_INSTALL_PLOT)
         tools/meteoris_plot.py
         DESTINATION ${CMAKE_INSTALL_BINDIR}
         RENAME meteoris_plot
+        COMPONENT meteoris_runtime
+    )
+endif()
+
+# Install the conservative HDF5 crash-recovery helper as a normal command.
+if(METEORIS_INSTALL_RECOVER_HDF5)
+    install(PROGRAMS
+        tools/meteoris_recover_hdf5.py
+        DESTINATION ${CMAKE_INSTALL_BINDIR}
+        RENAME meteoris_recover_hdf5
         COMPONENT meteoris_runtime
     )
 endif()

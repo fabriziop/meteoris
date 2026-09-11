@@ -12,11 +12,12 @@ usage() {
     cat <<USAGE
 Usage: ./install.sh --local | --system [--prefix DIR] [--no-sim] [cmake-options...]
 
-  --local       Install Meteoris, meteoris_plot and the meteoris_sim plugin
-                for the current user.
+  --local       Install Meteoris, meteoris_plot, meteoris_recover_hdf5 and
+                the meteoris_sim plugin for the current user.
                 Default prefix: $HOME/.local
 
-  --system      Install system-wide, including the meteoris_sim plugin.
+  --system      Install system-wide, including meteoris_recover_hdf5 and
+                the meteoris_sim plugin.
                 Default prefix: /usr/local
                 Run this mode with sudo if the prefix is not writable.
 
@@ -96,6 +97,7 @@ echo
 echo "Installed:"
 echo "  $PREFIX/bin/meteoris"
 echo "  $PREFIX/bin/meteoris_plot"
+echo "  $PREFIX/bin/meteoris_recover_hdf5"
 echo "  $PREFIX/share/meteoris/"
 if [[ "$INSTALL_SIM" -eq 1 ]]; then
     echo "  SoapySDR meteoris_sim plugin (CMake Soapy module directory)"

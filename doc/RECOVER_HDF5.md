@@ -4,6 +4,22 @@ This runbook describes conservative recovery procedures for an HDF5 output file 
 
 > **Important:** Work on a copy. HDF5 recovery tools can make a damaged file easier to inspect, but they cannot reconstruct data that was never flushed to disk or repair every form of metadata corruption.
 
+For the common unclean-shutdown case, Meteoris includes a conservative helper
+that automates the safe subset of this runbook while preserving the original.
+The helper is included in **both** Raspberry Pi build modes (full and
+recorder-only) and is installed as `meteoris_recover_hdf5`:
+
+```bash
+meteoris_recover_hdf5 /absolute/path/to/output.h5
+```
+
+By default it creates `output.h5.recovery`, records diagnostics beside that
+copy, and, if the normal `h5dump` probe fails, captures the full HDF5 error stack
+before deciding whether any mutation is justified. It clears a stale write/SWMR
+consistency flag only when that error stack identifies the condition, and uses
+`h5clear --increment` only after confirming an EOA/EOF mismatch. Use the manual
+procedure below for unusual failures or application-level validation.
+
 ## 1. Stop writers and identify the file
 
 Do not attempt recovery while Meteoris or another process may still be writing to the file.

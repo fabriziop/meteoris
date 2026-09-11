@@ -41,6 +41,14 @@ For a native Raspberry Pi build:
 ./build_rpi3.sh
 ```
 
+The menu has two modes, and **both include** `meteoris_recover_hdf5`:
+
+- full: `meteoris` + `meteoris_plot` + `meteoris_recover_hdf5`
+- recorder-only: `meteoris` + `meteoris_recover_hdf5`
+
+The recovery helper requires the distro HDF5 command-line tools (`h5dump`,
+`h5clear`, and `h5ls`; package `hdf5-tools` on Debian/Ubuntu/Raspberry Pi OS).
+
 For the complete native/cross-build procedure and dependencies, see
 [INSTALL.md](INSTALL.md).
 

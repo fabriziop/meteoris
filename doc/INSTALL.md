@@ -1,6 +1,6 @@
 # Download, Build and Install
 
-Meteoris can be bult and installed on X86 and ARM platforms.
+Meteoris can be built and installed on X86 and ARM platforms.
 
 
 ## Getting Meteoris
@@ -24,12 +24,16 @@ sudo apt update
 sudo apt install \
     build-essential cmake pkg-config \
     libsoapysdr-dev soapysdr-tools \
-    libhdf5-dev libspdlog-dev \
+    libhdf5-dev hdf5-tools libspdlog-dev \
     python3-numpy python3-matplotlib python3-h5py
 ```
 
 Python 3.11+ supplies `tomllib`. On older Python versions, install `tomli`
 or adapt the plotting tool accordingly.
+
+`hdf5-tools` is required by `meteoris_recover_hdf5` because the recovery helper
+uses the standard `h5dump`, `h5clear`, and `h5ls` utilities. It is therefore a
+runtime dependency in both Raspberry Pi build modes, including recorder-only.
 
 
 ### Build
@@ -85,7 +89,7 @@ sudo apt update
 sudo apt install \
         build-essential cmake pkg-config \
         libsoapysdr-dev soapysdr-tools \
-        libhdf5-dev libspdlog-dev libfftw3-dev \
+        libhdf5-dev hdf5-tools libspdlog-dev libfftw3-dev \
         python3-numpy python3-matplotlib python3-h5py
 ```
 
@@ -96,7 +100,7 @@ sudo apt update
 sudo apt install \
     build-essential cmake pkg-config \
     libsoapysdr-dev soapysdr-tools \
-    libhdf5-dev libspdlog-dev libfftw3-dev
+    libhdf5-dev hdf5-tools libspdlog-dev libfftw3-dev
 ```
 
 Then configure and build:
@@ -148,8 +152,8 @@ If neither condition is met (not running on a Raspberry Pi and no
 
 `build_rpi3.sh` asks which build you want:
 
-- full build: `meteoris` + `meteoris_plot`
-- recorder-only build: `meteoris` only
+- full build: `meteoris` + `meteoris_plot` + `meteoris_recover_hdf5`
+- recorder-only build: `meteoris` + `meteoris_recover_hdf5`
 
 You can also select the preset directly:
 
@@ -175,14 +179,20 @@ The cross preset intentionally uses:
 - `METEORIS_BUILD_SIM=OFF` to avoid installing/testing a host-incompatible
     SoapySDR plugin in cross-build output.
 - `METEORIS_INSTALL_PLOT=OFF` in recorder-only mode.
+- `METEORIS_INSTALL_RECOVER_HDF5=ON` in **both** modes, so the recovery helper
+  is available on headless recorder systems as well as full installations.
 
-You can then deploy `build-rpi3-aarch64/meteoris` to the Pi together with the
-runtime configuration files.
+Each configured build directory also contains `meteoris_recover_hdf5`. For a
+manual cross-build deployment, copy both the recorder and recovery helper to the
+Pi (and copy `meteoris_plot` as needed for a full installation). Prefer
+`cmake --install` when possible so executable permissions and runtime files are
+installed consistently.
 
 ## Install
 
 Meteoris provides two explicit install modes. By default they install the
-recorder, viewer **and the current `meteoris_sim` SoapySDR plugin**. This avoids
+recorder, viewer, `meteoris_recover_hdf5`, **and the current `meteoris_sim`
+SoapySDR plugin**. This avoids
 leaving an older simulator module active after source changes. Use `--no-sim`
 when the simulator is not wanted.
 
@@ -197,6 +207,7 @@ This installs:
 ```text
 ~/.local/bin/meteoris
 ~/.local/bin/meteoris_plot
+~/.local/bin/meteoris_recover_hdf5
 ~/.local/share/meteoris/
 ```
 
@@ -217,6 +228,7 @@ The default system prefix is `/usr/local`, producing:
 ```text
 /usr/local/bin/meteoris
 /usr/local/bin/meteoris_plot
+/usr/local/bin/meteoris_recover_hdf5
 /usr/local/share/meteoris/
 ```
 

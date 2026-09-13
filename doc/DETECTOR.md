@@ -547,8 +547,8 @@ The existing `PsdDetectorRecorder` remains responsible for:
 - active PSD recording;
 - post-trigger context;
 - retrigger/event merging;
-- maximum event duration;
-- rearm after forced cutoff;
+- maximum event duration; peak-tracker events reaching the limit are discarded;
+- rearm after a maximum-duration discard/cutoff;
 - daily file rotation;
 - HDF5 SWMR publication;
 - graceful shutdown.

@@ -1161,26 +1161,24 @@ The same event ID is retained.
 
 ---
 
-# 20. Maximum-event cutoff representation
+# 20. Maximum-event handling
 
-If `max_event_seconds` is reached, Meteoris stops the event immediately.
+If `max_event_seconds` is reached while `peak_tracker` is selected, Meteoris
+discards the entire event. The recorder truncates every HDF5 row belonging to
+that event, including pre-trigger rows written at trigger time, so the discarded
+event is absent from the logical `/psd/*` datasets. A DEBUG `event_discarded`
+message reports the event ID, elapsed time, configured limit, and number of
+removed rows. The end-of-program detector summary reports `discarded_events`.
 
-Unlike a normal trigger OFF, a forced maximum-duration cutoff does not append a
-new normal post-trigger tail.
+A normally completed event emits a DEBUG `event_recorded` message with its event
+ID, elapsed time, and saved-frame count, and increments `recorded_events`.
 
-The current HDF5 schema does not include a dedicated per-row flag explicitly
-saying:
+Other detector plugins retain the previous forced maximum-duration cutoff: the
+partial event remains recorded and `forced_cutoffs` is incremented.
 
-```text
-event ended because max_event_seconds was reached
-```
-
-That information is available in the running program summary through its
-forced-cutoff counter, but it is not represented as a separate HDF5 event-end
-record in `meteoris v0`.
-
-Therefore an offline reader should not infer a normal post-tail requirement
-for every event solely from the row count.
+The HDF5 schema has no separate event-end table or discard marker. Therefore
+offline readers see only successfully retained peak-tracker events; discarded
+peak-tracker event IDs may create gaps in the numeric event-ID sequence.
 
 ---
 

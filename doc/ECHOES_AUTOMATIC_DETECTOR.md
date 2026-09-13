@@ -85,8 +85,9 @@ that interval cancels the pending end, joining rotating-beam illumination gaps
 into one event.
 
 `detector.max_event_seconds` remains the recorder-level protection against a
-persistent signal, and `detector.rearm_seconds` applies after such a forced
-cutoff.
+persistent signal for this plugin. Unlike `peak_tracker`, `echoes_automatic`
+retains the partial event at the limit and increments `forced_cutoffs`;
+`detector.rearm_seconds` then applies after that cutoff.
 
 ## Performance and diagnostics
 

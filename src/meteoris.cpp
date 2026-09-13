@@ -198,7 +198,7 @@ struct Config
     // Recording/event parameters remain common to all active tracks.
     double detectorPreContextSeconds = 0.5;
     double detectorPostContextSeconds = 1.0;
-    // 0 disables forced event cutoff. Rearm applies only after a forced cutoff.
+    // 0 disables the maximum-duration action. Rearm applies after a discard/cutoff.
     double detectorMaxEventSeconds = 15.0;
     double detectorRearmSeconds = 1.0;
     // Keep compiled defaults consistent with config/meteoris.toml so a run
@@ -1127,6 +1127,28 @@ public:
     }
 
     const std::string &path() const { return _path; }
+    hsize_t rowCount() const { return _rows; }
+
+    void truncateRows(const hsize_t rows)
+    {
+        if (rows > _rows)
+            throw std::runtime_error("cannot grow HDF5 file via truncateRows");
+        if (rows == _rows) return;
+
+        hsize_t dims2[2] = {rows, static_cast<hsize_t>(_frequencies.size())};
+        hsize_t dims1[1] = {rows};
+        h5Check(H5Dset_extent(_dPsd, dims2), "truncate PSD");
+        h5Check(H5Dset_extent(_dTimestamp, dims1), "truncate timestamp");
+        h5Check(H5Dset_extent(_dFrameIndex, dims1), "truncate frame index");
+        h5Check(H5Dset_extent(_dEventId, dims1), "truncate event id");
+        h5Check(H5Dset_extent(_dDetectorState, dims1), "truncate detector state");
+        h5Check(H5Dset_extent(_dDetectorMax, dims1), "truncate detector max");
+        h5Check(H5Dset_extent(_dGain, dims1), "truncate gain");
+        _rows = rows;
+        _dirty = true;
+        flushSwmr(true);
+        resetStorageSafety();
+    }
 
     // Called for every PSD frame. Rotation is allowed only while no detector
     // event is in progress. If a daily boundary is crossed during an event,
@@ -1568,7 +1590,10 @@ public:
                         << " requested_threads=" << env.requestedThreads
                         << " hardware_threads=" << env.hardwareThreads
                         << " plugin_multithread="
-                        << (_detector->info().mayUseMultipleThreads ? "YES" : "NO"));
+                        << (_detector->info().mayUseMultipleThreads ? "YES" : "NO")
+                        << " max_event_policy="
+                        << (_detector->info().discardEventOnMaxDuration
+                                ? "discard" : "cutoff"));
 
         _preContextFrames = static_cast<size_t>(std::ceil(
             _cfg.detectorPreContextSeconds / _framePeriodSeconds));
@@ -1613,14 +1638,36 @@ public:
                 options.mode =
                     meteoris::detector::ProcessingMode::PreprocessOnly;
                 (void)_detector->process(makeDetectorFrame(frame), options);
+
+                const double elapsedSeconds =
+                    double(frame.timestampNs - _eventStartNs) * 1e-9;
+                if (_detector->info().discardEventOnMaxDuration)
+                {
+                    _writer.truncateRows(_eventStartRow);
+                    if (_savedFrames >= _eventSavedFrames)
+                        _savedFrames -= _eventSavedFrames;
+                    else
+                        _savedFrames = 0;
+                    ++_discardedEvents;
+                    spdlog::debug(
+                        "event_discarded detector={} event_id={} elapsed_s={:.3f} "
+                        "max_event_s={:.3f} discarded_frames={}",
+                        _cfg.detectorPlugin, _eventId, elapsedSeconds,
+                        _cfg.detectorMaxEventSeconds, _eventSavedFrames);
+                }
+                else
+                {
+                    ++_forcedCutoffs;
+                    finalizeRecordedEvent(frame.timestampNs);
+                }
+
                 _active = false;
                 _postRemaining = 0;
                 clearPre();
-                ++_forcedCutoffs;
                 const uint64_t rearmNs = static_cast<uint64_t>(
                     std::llround(_cfg.detectorRearmSeconds * 1e9));
                 _rearmUntilNs = frame.timestampNs + rearmNs;
-                _eventStartNs = 0;
+                resetEventTracking();
                 _writer.tick(frame.timestampNs, false);
                 return;
             }
@@ -1649,6 +1696,7 @@ public:
         {
             _writer.append(frame, _eventId, 1, metricDbHz);
             ++_savedFrames;
+            ++_eventSavedFrames;
             if (!above)
             {
                 _active = false;
@@ -1656,7 +1704,7 @@ public:
                 ++_triggerOffs;
                 if (_postRemaining == 0)
                 {
-                    _eventStartNs = 0;
+                    finalizeRecordedEvent(frame.timestampNs);
                     _writer.tick(frame.timestampNs, false);
                 }
             }
@@ -1667,6 +1715,7 @@ public:
         {
             _writer.append(frame, _eventId, 2, metricDbHz);
             ++_savedFrames;
+            ++_eventSavedFrames;
 
             if (above)
             {
@@ -1679,7 +1728,7 @@ public:
                 --_postRemaining;
                 if (_postRemaining == 0)
                 {
-                    _eventStartNs = 0;
+                    finalizeRecordedEvent(frame.timestampNs);
                     _writer.tick(frame.timestampNs, false);
                 }
             }
@@ -1691,16 +1740,20 @@ public:
         {
             ++_eventId;
             ++_triggerOns;
+            _eventStartRow = _writer.rowCount();
+            _eventSavedFrames = 0;
             for (size_t i = 0; i < _preCount; ++i)
             {
                 const size_t preIndex = oldestPreIndex(i);
                 _writer.append(_pre[preIndex].frame, _eventId, 0,
                                _pre[preIndex].maxDb);
                 ++_savedFrames;
+                ++_eventSavedFrames;
             }
             clearPre();
             _writer.append(frame, _eventId, 1, metricDbHz);
             ++_savedFrames;
+            ++_eventSavedFrames;
             _active = true;
             _eventStartNs = frame.timestampNs;
         }
@@ -1722,6 +1775,8 @@ public:
                         << " trigger_ons=" << _triggerOns
                         << " trigger_offs=" << _triggerOffs
                         << " forced_cutoffs=" << _forcedCutoffs
+                        << " recorded_events=" << _recordedEvents
+                        << " discarded_events=" << _discardedEvents
                         << " peak_limit_drops=" << _peakLimitDrops
                         << " close_peak_suppressions=" << _closeSuppressions
                         << " last_detector_process_us=" << _lastDetectorProcessUs
@@ -1766,6 +1821,25 @@ private:
             std::llround(_cfg.detectorDiagnosticIntervalSeconds * 1e9));
         return _lastDiagnosticNs == 0 ||
                frame.timestampNs >= _lastDiagnosticNs + intervalNs;
+    }
+
+    void resetEventTracking()
+    {
+        _eventStartNs = 0;
+        _eventStartRow = _writer.rowCount();
+        _eventSavedFrames = 0;
+    }
+
+    void finalizeRecordedEvent(const uint64_t endNs)
+    {
+        if (_eventStartNs == 0) return;
+        const double elapsedSeconds = endNs >= _eventStartNs
+            ? double(endNs - _eventStartNs) * 1e-9 : 0.0;
+        ++_recordedEvents;
+        spdlog::debug(
+            "event_recorded detector={} event_id={} elapsed_s={:.3f} saved_frames={}",
+            _cfg.detectorPlugin, _eventId, elapsedSeconds, _eventSavedFrames);
+        resetEventTracking();
     }
 
     void remember(const PsdFrame &frame, const float maxDb)
@@ -1909,11 +1983,15 @@ private:
     bool _active = false;
     size_t _postRemaining = 0;
     uint64_t _eventStartNs = 0;
+    hsize_t _eventStartRow = 0;
+    uint64_t _eventSavedFrames = 0;
     uint64_t _rearmUntilNs = 0;
     uint64_t _eventId = 0;
     uint64_t _triggerOns = 0;
     uint64_t _triggerOffs = 0;
     uint64_t _forcedCutoffs = 0;
+    uint64_t _recordedEvents = 0;
+    uint64_t _discardedEvents = 0;
     uint64_t _savedFrames = 0;
     uint64_t _peakLimitDrops = 0;
     uint64_t _closeSuppressions = 0;

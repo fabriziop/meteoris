@@ -52,7 +52,7 @@ Detector Info
 The detector API version is currently:
 
 ```text
-DETECTOR_API_VERSION = 3
+DETECTOR_API_VERSION = 4
 ```
 
 ## Frame ownership
@@ -80,8 +80,8 @@ DetectorResult process(const DetectorFrame &frame,
 The call is synchronous.
 
 `ProcessOptions.mode` selects either `ProcessingMode::Full` or
-`ProcessingMode::PreprocessOnly`. Meteoris uses `PreprocessOnly` during rearm
-and forced cutoff: detector preprocessing and smoothing history advance, while
+`ProcessingMode::PreprocessOnly`. Meteoris uses `PreprocessOnly` during rearm and maximum-duration
+discard/cutoff handling: detector preprocessing and smoothing history advance, while
 association and tracking are suppressed. This lets the first post-rearm frame
 use current smoothing history without inheriting an earlier track.
 
@@ -213,7 +213,10 @@ Each compile-time detector implementation owns:
 
 `meteoris.cpp` owns only common detector keys such as `enabled`, `plugin`, `threads`,
 `diagnostic_interval_s`, `pre_context_s`, `post_context_s`, `max_event_seconds`, and
-`rearm_seconds`. Plugin schemas are also used to render the effective/default TOML,
+`rearm_seconds`. A detector can request `discardEventOnMaxDuration` in its `Info`;
+when set, the recorder removes the whole in-progress event instead of retaining a
+forced-cutoff prefix. `peak_tracker` enables this policy. Plugin schemas are also
+used to render the effective/default TOML,
 so adding a detector does not require adding its settings to `meteoris.cpp`.
 
 Configuration files may contain settings for multiple compiled-in detectors. The

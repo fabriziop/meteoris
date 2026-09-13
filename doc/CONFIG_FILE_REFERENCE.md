@@ -1166,11 +1166,16 @@ occurs. A new active track during this interval merges into the same event.
 
 ## `max_event_seconds`
 
-Maximum duration of one merged recorded event. `0` disables the forced cutoff.
+Maximum duration of one merged event. `0` disables the limit. With the
+`peak_tracker` plugin, an event that reaches this duration is discarded
+completely: all of its already-written pre-trigger, active, and post-trigger
+rows are removed from the HDF5 datasets. A DEBUG `event_discarded` message is
+emitted and the final detector summary increments `discarded_events`. Other
+detector plugins retain the recorder's forced-cutoff behavior.
 
 ## `rearm_seconds`
 
-Detector inhibit interval after a forced maximum-duration cutoff.
+Detector inhibit interval after a maximum-duration discard or forced cutoff.
 
 # `[detector.stationary]`
 
@@ -1672,9 +1677,10 @@ diagnostic_interval_s = 1.0
 pre_context_s = 0.5
 post_context_s = 1.0
 
-# Maximum event duration; 0 disables forced cutoff.
+# Maximum event duration. peak_tracker discards an event that reaches it.
+# 0 disables the limit.
 max_event_seconds = 15
-# Trigger inhibit after a forced cutoff.
+# Trigger inhibit after a maximum-duration discard/cutoff.
 rearm_seconds = 1.0
 
 [detector.stationary]

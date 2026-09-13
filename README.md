@@ -179,8 +179,10 @@ tolerated through `lost_s`.
 
 Recording starts when the number of active tracks changes from zero to one or
 more, and trigger OFF occurs when the last active track is lost. Existing
-pre/post context, HDF5 recording, event merging, maximum event duration, daily
-rotation and graceful shutdown behavior remain common to both signal types.
+pre/post context, HDF5 recording, event merging, daily rotation and graceful
+shutdown behavior remain common to both signal types. `max_event_seconds` bounds
+a merged peak-tracker event; if that duration is reached, the complete event is
+discarded from the HDF5 datasets and the detector rearms after `rearm_seconds`.
 
 A useful starting configuration is:
 
@@ -192,6 +194,8 @@ time_mean_psds = 3
 peak_threshold_db = 5.0
 min_peak_separation_hz = 300
 max_peaks_per_psd = 20
+max_event_seconds = 15
+rearm_seconds = 1
 
 [detector.stationary]
 min_hz = -5000
@@ -608,7 +612,11 @@ only. Syslog is not used. The file log never contains ANSI colors. `info` and
 higher-severity records are flushed to the file immediately, so daemon startup
 and state-change messages are visible without waiting for a warning, shutdown,
 or an output-buffer fill. Periodic detector diagnostics remain `debug` messages;
-use `level = "debug"` when those recurring details are wanted.
+use `level = "debug"` when those recurring details are wanted. In triggered
+recording, each retained event also emits an `event_recorded` DEBUG line. If a
+`peak_tracker` event reaches `max_event_seconds`, it emits `event_discarded`
+instead; the final INFO summary reports both `recorded_events` and
+`discarded_events`.
 
 CLI overrides include `--log-level`, `--log-color`, and `--no-log-color`.
 

@@ -700,6 +700,7 @@ public:
         _info.version = "1";
         _info.supportsStructuredDebug = true;
         _info.mayUseMultipleThreads = false;
+        _info.discardEventOnMaxDuration = true;
     }
 
     const Info &info() const override

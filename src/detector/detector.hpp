@@ -10,7 +10,7 @@
 namespace meteoris {
 namespace detector {
 
-constexpr uint32_t DETECTOR_API_VERSION = 3;
+constexpr uint32_t DETECTOR_API_VERSION = 4;
 
 enum class State
 {
@@ -133,6 +133,9 @@ struct Info
     const char *version = nullptr;
     bool supportsStructuredDebug = true;
     bool mayUseMultipleThreads = false;
+    // Recorder policy requested by the detector when max_event_seconds is
+    // reached. If true, all rows for the overlong event are removed.
+    bool discardEventOnMaxDuration = false;
 };
 
 class IDetector

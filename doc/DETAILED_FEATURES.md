@@ -129,6 +129,8 @@ Here is a concise list of the main **Meteoris 0.5.0** features as developed so f
   * Toggleable high-visibility trigger markers.
   * Displays **all ON/OFF/retrigger transitions**.
   * One event displayed at a time.
+  * Reuses one Matplotlib GUI window while browsing; event changes redraw the
+    existing figure instead of destroying and recreating the desktop window.
   * `Space` advances to the next event.
   * `number + Space` jumps directly to an event.
   * `R` refreshes an active SWMR recording.

@@ -521,6 +521,7 @@ def plot_event(
     save_dir: Path | None,
     plot_cfg: PlotConfig,
     save_state: dict[str, Path] | None = None,
+    reuse_fig: plt.Figure | None = None,
 ) -> tuple[plt.Figure, dict[str, bool]]:
     refresh_live_datasets(h5)
     freq_hz = np.asarray(h5["/psd/frequency_hz"], dtype=float)
@@ -552,9 +553,25 @@ def plot_event(
     # Two vertically stacked plots share the UTC time axis. The compact upper
     # plot shows, for each waterfall time column, the maximum PSD density over
     # all frequency bins.
-    fig, (ax_max_power, ax) = plt.subplots(
+    # Interactive browsing reuses one Matplotlib Figure/window across events.
+    # Clearing the Figure removes all event-specific axes, colorbars and widgets
+    # while leaving the GUI window itself alive (and therefore preserving its
+    # position, maximized state and focus). Headless/export callers simply omit
+    # reuse_fig and receive a fresh Figure as before.
+    if reuse_fig is None:
+        fig = plt.figure(figsize=(plot_cfg.figure_width, plot_cfg.figure_height))
+    else:
+        fig = reuse_fig
+        for cid in getattr(fig, "_meteoris_event_cids", ()):
+            try:
+                fig.canvas.mpl_disconnect(cid)
+            except Exception:
+                pass
+        fig.clear()
+        fig.set_size_inches(plot_cfg.figure_width, plot_cfg.figure_height, forward=True)
+
+    ax_max_power, ax = fig.subplots(
         2, 1,
-        figsize=(plot_cfg.figure_width, plot_cfg.figure_height),
         sharex=True,
         gridspec_kw={
             "height_ratios": (1.0, 4.0),
@@ -884,25 +901,21 @@ def plot_event(
         if key_l == "z":
             navigation["advance_by"] = -20
             navigation["digits"] = ""
-            plt.close(fig)
             return
 
         if key_l == "x":
             navigation["advance_by"] = -10
             navigation["digits"] = ""
-            plt.close(fig)
             return
 
         if key_l == "c":
             navigation["advance_by"] = 10
             navigation["digits"] = ""
-            plt.close(fig)
             return
 
         if key_l == "v":
             navigation["advance_by"] = 20
             navigation["digits"] = ""
-            plt.close(fig)
             return
 
         if key_l == "q":
@@ -954,7 +967,6 @@ def plot_event(
         if key_l == "r":
             navigation["refresh"] = True
             navigation["digits"] = ""
-            plt.close(fig)
             return
 
         if key_l in (
@@ -966,7 +978,6 @@ def plot_event(
               key in (" ", "space", "enter", "return")):
             navigation["digits"] = ""
             navigation["advance_by"] = -1
-            plt.close(fig)
             return
 
         if key in (" ", "space", "enter", "return"):
@@ -974,15 +985,15 @@ def plot_event(
                 navigation["jump_to"] = int(navigation["digits"])
             else:
                 navigation["advance_by"] = 1
-            plt.close(fig)
 
     def on_key_release(event):
         key = (event.key or "").lower()
         if key in ("shift", "shift_l", "shift_r"):
             modifier_state["shift_down"] = False
 
-    fig.canvas.mpl_connect("key_press_event", on_key)
-    fig.canvas.mpl_connect("key_release_event", on_key_release)
+    key_press_cid = fig.canvas.mpl_connect("key_press_event", on_key)
+    key_release_cid = fig.canvas.mpl_connect("key_release_event", on_key_release)
+    fig._meteoris_event_cids = (key_press_cid, key_release_cid)
 
     if save_dir is not None:
         save_dir.mkdir(parents=True, exist_ok=True)
@@ -1124,12 +1135,14 @@ def main(argv: Iterable[str] | None = None) -> int:
                 save_state = {"path": Path("meteoris_saved.h5")}
                 pos = 0
                 selected_pos = {event_no: i for i, event_no in enumerate(selected)}
+                fig = None
+                window_initialized = False
                 while 0 <= pos < len(selected):
                     n = selected[pos]
                     fig, navigation = plot_event(
                         h5, events[n - 1], len(events), cmap,
                         effective_db_min, effective_db_max,
-                        args.save_dir, plot_cfg, save_state
+                        args.save_dir, plot_cfg, save_state, reuse_fig=fig
                     )
                     try:
                         fig.canvas.manager.set_window_title(
@@ -1137,8 +1150,27 @@ def main(argv: Iterable[str] | None = None) -> int:
                         )
                     except Exception:
                         pass
-                    open_maximized(fig)
-                    plt.show(block=True)
+
+                    if not window_initialized:
+                        # Create/show/maximize the GUI window only once. Subsequent
+                        # events redraw the same Figure instead of destroying and
+                        # recreating the window.
+                        plt.show(block=False)
+                        open_maximized(fig)
+                        window_initialized = True
+                    fig.canvas.draw_idle()
+
+                    # Keep the backend GUI responsive until a navigation callback
+                    # sets an action. Manual window close makes fignum_exists false.
+                    while (plt.fignum_exists(fig.number) and
+                           not navigation.get("quit") and
+                           not navigation.get("refresh") and
+                           navigation.get("jump_to") is None and
+                           navigation.get("advance_by") is None):
+                        plt.pause(0.05)
+
+                    if not plt.fignum_exists(fig.number):
+                        break
 
                     if navigation.get("quit"):
                         break
@@ -1182,6 +1214,9 @@ def main(argv: Iterable[str] | None = None) -> int:
                         continue
 
                     break
+
+                if fig is not None and plt.fignum_exists(fig.number):
+                    plt.close(fig)
 
     except (OSError, ValueError, KeyError) as exc:
         print(f"Error: {exc}", file=sys.stderr)

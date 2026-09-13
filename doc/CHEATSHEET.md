@@ -187,6 +187,9 @@ meteoris_plot --save-dir plots --no-show data/meteoris_YYYYMMDD.h5
 
 ### Viewer keys
 
+The interactive viewer keeps one Matplotlib window open and redraws it when you
+navigate between events.
+
 | Key | Function |
 | --- | --- |
 | `Space` / `Enter` | Next event |

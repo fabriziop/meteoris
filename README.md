@@ -320,7 +320,10 @@ meteoris_plot data/meteoris_YYYYMMDD.h5
 
 where `YYYYMMDD` is the year, month, and day of the file to display.
 The Meteoris viewer accepts the following keys for interactive navigation
-through recorded events:
+through recorded events. Interactive browsing reuses a single Matplotlib GUI
+window: moving to another event redraws that same window instead of closing and
+reopening it, preserving the window position/maximized state and avoiding desktop
+focus flicker.
 
 - `Space`/`Enter`: next event
 - `Shift+Space`/`Shift+Enter`: previous event

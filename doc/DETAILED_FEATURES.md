@@ -171,7 +171,9 @@ Here is a concise list of the main **Meteoris 0.5.0** features as developed so f
 
 Meteoris uses `spdlog` for runtime output with Unix-epoch millisecond timestamps
 and severity levels. Foreground output supports automatic per-level ANSI
-colors; daemon mode uses the text-file sink only. Logging level, file and color behavior are
+colors; daemon mode uses the text-file sink only. INFO and higher-severity file records are
+flushed immediately so daemon status is visible without waiting for buffer fill or shutdown.
+Logging level, file and color behavior are
 configurable from TOML or CLI, and detector tuning diagnostics are classified
 as `debug` messages.
 

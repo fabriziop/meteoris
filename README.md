@@ -604,7 +604,11 @@ are bold red. Detector periodic diagnostics
 are emitted at `debug`, so use `level = "debug"` while tuning the detector.
 File logging is enabled by default in both foreground and daemon mode.
 Foreground mode also logs to the terminal; daemon mode logs to the text file
-only. Syslog is not used. The file log never contains ANSI colors.
+only. Syslog is not used. The file log never contains ANSI colors. `info` and
+higher-severity records are flushed to the file immediately, so daemon startup
+and state-change messages are visible without waiting for a warning, shutdown,
+or an output-buffer fill. Periodic detector diagnostics remain `debug` messages;
+use `level = "debug"` when those recurring details are wanted.
 
 CLI overrides include `--log-level`, `--log-color`, and `--no-log-color`.
 

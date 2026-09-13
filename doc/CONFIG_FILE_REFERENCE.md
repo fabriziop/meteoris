@@ -797,6 +797,13 @@ Daemon:
 plain text log file only
 ```
 
+`info` and higher-severity records are flushed to the text log immediately.
+This is especially important in daemon mode because there is no terminal sink:
+startup and state-change messages do not remain buffered until a warning,
+shutdown, or file-buffer fill. Periodic detector diagnostics are still emitted
+at `debug`, so select `level = "debug"` when those recurring diagnostics are
+required.
+
 Meteoris does **not** use syslog.
 
 CLI overrides are available:

@@ -2565,7 +2565,14 @@ void configureLogging(const Config &cfg)
     auto logger = std::make_shared<spdlog::logger>(
         "meteoris", sinks.begin(), sinks.end());
     logger->set_level(level);
-    logger->flush_on(spdlog::level::warn);
+
+    // A daemon has no terminal sink, so the text log is the only immediate
+    // indication that it is alive and configured correctly.  Do not leave
+    // normal INFO records sitting in the std::ofstream/spdlog buffers until a
+    // later warning, shutdown, or buffer fill.  INFO traffic is deliberately
+    // low-volume (startup/state transitions/summaries), so flushing it is
+    // inexpensive and makes foreground and daemon observability consistent.
+    logger->flush_on(spdlog::level::info);
     spdlog::set_default_logger(logger);
 }
 

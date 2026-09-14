@@ -28,6 +28,7 @@ meteoris/
 │   └── echoes_automatic_detector_test.cpp
 ├── tools/
 │   ├── meteoris_plot.py
+│   ├── meteoris_config.py
 │   └── meteoris_recover_hdf5.py
 ├── config/
 │   ├── meteoris.toml
@@ -37,6 +38,7 @@ meteoris/
 │   ├── BUG20260902.md
 │   ├── CHEATSHEET.md
 │   ├── CONFIG_FILE_REFERENCE.md
+│   ├── CONFIG_WIZARD.md
 │   ├── DETAILED_FEATURES.md
 │   ├── DETECTOR.md
 │   ├── DETECTOR_PLUGIN_API.md

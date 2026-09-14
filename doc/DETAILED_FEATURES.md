@@ -1,4 +1,4 @@
-Here is a concise list of the main **Meteoris 0.5.0** features as developed so far:
+Here is a concise list of the main **Meteoris 0.6.0** features as developed so far:
 
 * **Real-time SDR acquisition**
 
@@ -153,7 +153,7 @@ Here is a concise list of the main **Meteoris 0.5.0** features as developed so f
   * Local-user or system-wide installation.
   * Consistent repository organization for application, simulator, tools and configuration.
   * `meteoris --version` and `meteoris_plot --version`.
-  * Current software version: **0.5.0**.
+  * Current software version: **0.6.0**.
 
 
 

@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.16)
 
 project(Meteoris
-    VERSION 0.5.1
+    VERSION 0.6.0
     DESCRIPTION "Real-time SDR meteor detector, recorder and simulator"
     LANGUAGES C CXX
 )
@@ -12,6 +12,7 @@ option(METEORIS_FAST_MATH "Enable fast floating-point math for DSP kernels" ON)
 option(METEORIS_USE_FFTW "Use FFTW3 for FFT instead of internal Radix-2 FFT" ON)
 option(METEORIS_INSTALL_PLOT "Install the meteoris_plot viewer tool" ON)
 option(METEORIS_INSTALL_RECOVER_HDF5 "Install the meteoris_recover_hdf5 recovery tool" ON)
+option(METEORIS_INSTALL_CONFIG_TOOL "Install the interactive meteoris_config tool" ON)
 set(METEORIS_CPU_TUNE "" CACHE STRING "Optional CPU tuning value used as -mcpu=<value>")
 
 if(CMAKE_CROSSCOMPILING AND METEORIS_NATIVE_OPTIMIZATION)
@@ -190,6 +191,24 @@ if(METEORIS_INSTALL_RECOVER_HDF5)
         DEPENDS "${METEORIS_RECOVER_HDF5_BUILD_PATH}")
 endif()
 
+# The configuration wizard is useful on both full and recorder-only systems.
+# Like the recovery helper, expose it directly in the build directory too.
+if(METEORIS_INSTALL_CONFIG_TOOL)
+    set(METEORIS_CONFIG_TOOL_BUILD_PATH
+        "${CMAKE_BINARY_DIR}/meteoris_config")
+    add_custom_command(
+        OUTPUT "${METEORIS_CONFIG_TOOL_BUILD_PATH}"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${CMAKE_SOURCE_DIR}/tools/meteoris_config.py"
+                "${METEORIS_CONFIG_TOOL_BUILD_PATH}"
+        DEPENDS "${CMAKE_SOURCE_DIR}/tools/meteoris_config.py"
+        COMMENT "Preparing meteoris_config"
+        VERBATIM
+    )
+    add_custom_target(meteoris_config_tool ALL
+        DEPENDS "${METEORIS_CONFIG_TOOL_BUILD_PATH}")
+endif()
+
 install(TARGETS meteoris
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
     COMPONENT meteoris_runtime
@@ -201,6 +220,16 @@ if(METEORIS_INSTALL_PLOT)
         tools/meteoris_plot.py
         DESTINATION ${CMAKE_INSTALL_BINDIR}
         RENAME meteoris_plot
+        COMPONENT meteoris_runtime
+    )
+endif()
+
+# Install the interactive configuration wizard as a normal command.
+if(METEORIS_INSTALL_CONFIG_TOOL)
+    install(PROGRAMS
+        tools/meteoris_config.py
+        DESTINATION ${CMAKE_INSTALL_BINDIR}
+        RENAME meteoris_config
         COMPONENT meteoris_runtime
     )
 endif()

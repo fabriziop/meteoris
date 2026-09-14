@@ -41,10 +41,10 @@ For a native Raspberry Pi build:
 ./build_rpi3.sh
 ```
 
-The menu has two modes, and **both include** `meteoris_recover_hdf5`:
+The menu has two modes, and **both include** `meteoris_config` and `meteoris_recover_hdf5`:
 
-- full: `meteoris` + `meteoris_plot` + `meteoris_recover_hdf5`
-- recorder-only: `meteoris` + `meteoris_recover_hdf5`
+- full: `meteoris` + `meteoris_plot` + `meteoris_config` + `meteoris_recover_hdf5`
+- recorder-only: `meteoris` + `meteoris_config` + `meteoris_recover_hdf5`
 
 The recovery helper requires the distro HDF5 command-line tools (`h5dump`,
 `h5clear`, and `h5ls`; package `hdf5-tools` on Debian/Ubuntu/Raspberry Pi OS).
@@ -70,6 +70,17 @@ meteoris --config /path/to/meteoris.toml
 ```
 
 Command-line options override the TOML configuration.
+
+To create or revise the recorder configuration interactively:
+
+```bash
+meteoris_config
+# start from another existing TOML:
+meteoris_config existing.toml
+```
+
+Choose `smart` to answer only essential settings or `expert` to review every
+setting. The default output is `meteoris.toml.new`.
 
 ## 3. Minimum recorder configuration
 

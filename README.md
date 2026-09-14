@@ -6,11 +6,15 @@ supported by [SoapySDR drivers](https://github.com/pothosware/SoapySDR/wiki).
 
 It consists of a capture/recording program (`meteoris`) that continuously
 listens for incoming signals and saves them to a file when a meteor signal is
-detected. The other main component is a plotting program (`meteoris_plot`) that
-reads recorded meteor-signal events from a file and displays them one at a time
-as horizontal waterfall diagrams. The suite also includes
-`meteoris_recover_hdf5`, a conservative recovery helper for HDF5 files left
-unreadable after a crash, forced termination, or power loss. A SoapySDR simulator driver is also
+detected. Furthermore, it consists of a set of tools.
+A plotting program (`meteoris_plot`) that
+reads recorded meteor-signal events and displays them one at a time
+as horizontal waterfall diagrams.
+A configuration wizard (`meteoris_config`) for an easy generation of a
+Meteoris configuration file from questions and answers.
+A conservative recovery helper (`meteoris_recover_hdf5`) for HDF5 files left
+unreadable after a crash, forced termination, or power loss.
+A SoapySDR simulator driver is also
 available. It synthesizes typical meteor-scatter radio signals that can be
 recorded by Meteoris and is useful for adjusting critical receiver and detector
 parameters.
@@ -18,7 +22,7 @@ parameters.
 Meteoris has currently been tested on Ubuntu/Linux on X86 and on
 Pi OS trixie on Raspberry Pi 3B both with the [HackRF One
 SDR](https://hackrf.readthedocs.io/en/latest/hackrf_one.html).
-Meteoris is currently at version 0.5.1 and should therefore be considered alpha
+Meteoris is currently at version 0.6.0 and should therefore be considered alpha
 software.
 
 ### Author's Note
@@ -56,16 +60,32 @@ short path from build and configuration to recording and viewing events.**
 The Raspberry Pi build helper offers two modes. Both include the HDF5 recovery
 command:
 
-- **Full:** `meteoris` + `meteoris_plot` + `meteoris_recover_hdf5`
-- **Recorder-only:** `meteoris` + `meteoris_recover_hdf5`
+- **Full:** `meteoris` + `meteoris_plot` + `meteoris_config` + `meteoris_recover_hdf5`
+- **Recorder-only:** `meteoris` + `meteoris_config` + `meteoris_recover_hdf5`
 
 The recorder-only mode omits the plotting tool and simulator, but deliberately
-keeps `meteoris_recover_hdf5` so a headless recorder can recover files after an
-unclean shutdown. See [INSTALL.md](doc/INSTALL.md) for native and cross-build
+keeps both `meteoris_config` and `meteoris_recover_hdf5` so a headless recorder
+can create/review configuration files and recover files after an unclean shutdown. See [INSTALL.md](doc/INSTALL.md) for native and cross-build
 details.
 
 
 # Set Meteoris Configuration
+
+The installed `meteoris_config` helper can create a complete commented
+`meteoris.toml` interactively:
+
+```bash
+meteoris_config
+```
+
+If `./meteoris.toml` exists, its current values are proposed as defaults. You
+can also name another existing file, for example `meteoris_config site.toml`.
+The wizard offers **smart** mode (essential settings only) and **expert** mode
+(all settings). Each prompt is numbered as `section.parameter`, includes a short
+explanation, and the same numbered explanation is written as a TOML comment.
+Before writing, the wizard offers an input review; smart mode reviews only the
+settings it asked. The default output name is `meteoris.toml.new`. See
+[CONFIG_WIZARD.md](doc/CONFIG_WIZARD.md) for the complete workflow.
 
 Meteoris uses the simple [TOML format](https://toml.io/en/) for its
 configuration files. A TOML file is divided into sections identified by names

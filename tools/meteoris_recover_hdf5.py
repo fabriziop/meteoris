@@ -25,7 +25,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Sequence
 
-__version__ = "0.5.1"
+__version__ = "0.6.0"
 
 
 class RecoveryError(RuntimeError):

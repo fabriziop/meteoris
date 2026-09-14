@@ -1,7 +1,23 @@
 # Meteoris configuration reference
 
+# Meteoris configuration wizard
+
+The installed `meteoris_config` command is an interactive front-end for this
+configuration. It reads `./meteoris.toml` when present (or an explicitly named
+TOML), proposes those values as defaults, and fills missing values from the
+canonical `config/meteoris.toml`. `smart` mode asks only essential settings;
+`expert` asks every setting. Each prompt and generated comment carries a stable
+`section.parameter` number based on the input file order, with missing settings
+appended in canonical order. The default output is `meteoris.toml.new`.
+
+```bash
+meteoris_config
+meteoris_config --mode expert existing.toml
+```
+
+
 This document describes the `meteoris.toml` configuration file used by
-Meteoris 0.5.0.
+Meteoris 0.6.0.
 
 Meteoris reads configuration values from TOML sections and then applies any
 command-line overrides. The precedence is:

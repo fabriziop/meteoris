@@ -78,7 +78,7 @@ class MeteorisConfigTests(unittest.TestCase):
         self.assertEqual(mc._nested_get(values, target.dotted)[1], replacement)
 
     def test_meteoris_version_matches_project(self) -> None:
-        self.assertEqual(mc._meteoris_version(), "0.6.0")
+        self.assertEqual(mc._meteoris_version(), (ROOT / "VERSION").read_text(encoding="utf-8").strip())
 
     def test_generated_toml_is_complete_and_parseable(self) -> None:
         sections, values = mc.load_schema(ROOT / "config" / "meteoris.toml")

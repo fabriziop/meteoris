@@ -1,4 +1,4 @@
-Here is a concise list of the main **Meteoris 0.6.0** features as developed so far:
+Here is a concise list of the main **Meteoris** features as developed so far:
 
 * **Real-time SDR acquisition**
 
@@ -69,7 +69,8 @@ Here is a concise list of the main **Meteoris 0.6.0** features as developed so f
 * **Live HDF5 access**
 
   * HDF5 **SWMR (Single Writer Multiple Reader)** support.
-  * `meteoris_plot` can inspect today's HDF5 file while Meteoris is still recording.
+  * `meteoris_plot` can inspect today's HDF5 file while Meteoris is still
+    recording.
   * Configurable SWMR flush interval.
   * No need to copy the active HDF5 file before inspecting it.
 
@@ -78,7 +79,8 @@ Here is a concise list of the main **Meteoris 0.6.0** features as developed so f
   * One HDF5 file per logical day.
   * Configurable UTC rotation time (`HH:MM`).
   * File rotation is delayed if an event crosses the boundary.
-  * The complete event, including post-trigger context, remains in the previous file.
+  * The complete event, including post-trigger context, remains in the
+    previous file.
 
 * **Storage protection**
 
@@ -91,15 +93,18 @@ Here is a concise list of the main **Meteoris 0.6.0** features as developed so f
 * **Graceful operation**
 
   * Continuous operation until `SIGINT`/`SIGTERM`.
-  * First Ctrl-C waits for the current event and its post-trigger context to finish.
+  * First Ctrl-C waits for the current event and its post-trigger context
+    to finish.
   * Second Ctrl-C forces immediate termination.
   * HDF5 is flushed and closed cleanly.
   * Optional daemon operation.
-  * Plain text-file logging by default in both foreground and daemon mode; no syslog.
+  * Plain text-file logging by default in both foreground and daemon mode;
+    no syslog.
 
 * **TOML configuration**
 
-  * Separate sections for `[sdr]`, `[dsp]`, `[psd]`, `[runtime]`, `[agc]`, `[detector]`, and `[output]`.
+  * Separate sections for `[sdr]`, `[dsp]`, `[psd]`, `[runtime]`, `[agc]`,
+    `[detector]`, and `[output]`.
   * CLI options override TOML.
   * Sensible built-in defaults when `meteoris.toml` is absent.
   * Detector enabled by default.
@@ -120,7 +125,8 @@ Here is a concise list of the main **Meteoris 0.6.0** features as developed so f
   * Reads both closed and active SWMR HDF5 recordings.
   * Displays metadata and embedded TOML.
   * Lists detected events.
-  * Diagnostic event columns for total, pre-trigger, active and post-trigger PSD counts.
+  * Diagnostic event columns for total, pre-trigger, active and post-trigger
+    PSD counts.
   * Event completeness/status indication.
   * Gqrx-like waterfall color map.
   * Time on X axis, frequency on Y axis, PSD density by color.
@@ -141,9 +147,11 @@ Here is a concise list of the main **Meteoris 0.6.0** features as developed so f
   * Synthetic SoapySDR receiver for end-to-end testing.
   * Native CS8 generation.
   * Direct-buffer interface.
-  * Generates finite near-zero stationary echoes plus separate meteor-like chirped events.
+  * Generates finite near-zero stationary echoes plus separate meteor-like
+    chirped events.
   * Real-time pacing.
-  * Allows testing DSP, detector, HDF5 recording and plotting without an actual receiver.
+  * Allows testing DSP, detector, HDF5 recording and plotting without an
+    actual receiver.
 
 * **Build/install infrastructure**
 
@@ -151,9 +159,11 @@ Here is a concise list of the main **Meteoris 0.6.0** features as developed so f
   * Out-of-source `build/` directory.
   * Convenience `build.sh`.
   * Local-user or system-wide installation.
-  * Consistent repository organization for application, simulator, tools and configuration.
-  * `meteoris --version` and `meteoris_plot --version`.
-  * Current software version: **0.6.0**.
+  * Consistent repository organization for application, simulator, tools
+    and configuration.
+  * `meteoris --version`, `meteoris_plot --version`,
+    `meteoris_config --version`, and `meteoris_recover_hdf5 --version`
+    all report the package version from the root `VERSION` source of truth.
 
 
 
@@ -173,15 +183,17 @@ Here is a concise list of the main **Meteoris 0.6.0** features as developed so f
 
 Meteoris uses `spdlog` for runtime output with Unix-epoch millisecond timestamps
 and severity levels. Foreground output supports automatic per-level ANSI
-colors; daemon mode uses the text-file sink only. INFO and higher-severity file records are
-flushed immediately so daemon status is visible without waiting for buffer fill or shutdown.
-Logging level, file and color behavior are
+colors; daemon mode uses the text-file sink only. INFO and higher-severity file
+records are flushed immediately so daemon status is visible without waiting
+for buffer fill or shutdown.  Logging level, file and color behavior are
 configurable from TOML or CLI, and detector tuning diagnostics are classified
 as `debug` messages.
 
-* **Daily UTC text-log rotation** with configurable `HH:MM` boundary and dated filenames.
+* **Daily UTC text-log rotation** with configurable `HH:MM` boundary and
+  dated filenames.
 
-* **Recoverable SDR overflow handling**: `SOAPY_SDR_OVERFLOW` is logged at error level and counted, but does not terminate acquisition.
+* **Recoverable SDR overflow handling**: `SOAPY_SDR_OVERFLOW` is logged
+  at error level and counted, but does not terminate acquisition.
 
 
 * **Acquisition/DSP block diagnostics**
@@ -204,4 +216,5 @@ as `debug` messages.
 
 ---
 
-Copyright (c) 2026 Fabrizio Pollastri. Licensed under the GNU General Public License v3.0; see `LICENSE`.
+Copyright (c) 2026 Fabrizio Pollastri. Licensed under the GNU General
+Public License v3.0; see `LICENSE`.

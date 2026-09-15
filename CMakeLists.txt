@@ -1,9 +1,31 @@
 cmake_minimum_required(VERSION 3.16)
 
+# VERSION is the single authoritative package version. Keep release version
+# changes to this one file; CMake, C++, Python tools, packaging, and docs derive
+# their release version from it.
+file(STRINGS "${CMAKE_SOURCE_DIR}/VERSION" METEORIS_VERSION LIMIT_COUNT 1)
+string(STRIP "${METEORIS_VERSION}" METEORIS_VERSION)
+if(NOT METEORIS_VERSION MATCHES "^[0-9]+\\.[0-9]+\\.[0-9]+$")
+    message(FATAL_ERROR "Invalid VERSION '${METEORIS_VERSION}'; expected MAJOR.MINOR.PATCH")
+endif()
+
 project(Meteoris
-    VERSION 0.6.0
+    VERSION ${METEORIS_VERSION}
     DESCRIPTION "Real-time SDR meteor detector, recorder and simulator"
     LANGUAGES C CXX
+)
+
+configure_file(
+    "${CMAKE_SOURCE_DIR}/src/version.hpp.in"
+    "${CMAKE_BINARY_DIR}/generated/version.hpp"
+    @ONLY
+)
+
+# Make VERSION available beside build-tree Python commands as well.
+configure_file(
+    "${CMAKE_SOURCE_DIR}/VERSION"
+    "${CMAKE_BINARY_DIR}/VERSION"
+    COPYONLY
 )
 
 option(METEORIS_BUILD_SIM "Build the SoapySDR meteoris_sim plugin" ON)
@@ -110,6 +132,7 @@ add_executable(meteoris
 
 target_include_directories(meteoris PRIVATE
     src
+    "${CMAKE_BINARY_DIR}/generated"
     ${HDF5_INCLUDE_DIRS}
     ${METEORIS_SOAPY_INCLUDE_DIRS}
     ${FFTW3F_INCLUDE_DIRS}
@@ -261,7 +284,7 @@ if(METEORIS_INSTALL_PLOT)
     )
 endif()
 
-install(FILES README.md LICENSE
+install(FILES README.md LICENSE VERSION
     DESTINATION ${CMAKE_INSTALL_DATADIR}/meteoris
     COMPONENT meteoris_runtime
 )

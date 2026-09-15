@@ -684,4 +684,5 @@ instead of reporting only the latest noise peak.
 
 ---
 
-Copyright (c) 2026 Fabrizio Pollastri. Licensed under the GNU General Public License v3.0; see `LICENSE`.
+Copyright (c) 2026 Fabrizio Pollastri. Licensed under the GNU General
+Public License v3.0; see `LICENSE`.

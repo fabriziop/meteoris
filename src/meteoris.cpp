@@ -69,6 +69,7 @@
 
 #include "detector/detector.hpp"
 #include "fft/fft_backend.hpp"
+#include "version.hpp"
 
 #if defined(__AVX2__)
 #include <immintrin.h>
@@ -81,7 +82,6 @@
 
 namespace
 {
-constexpr const char *METEORIS_VERSION = "0.6.0";
 constexpr const char *METEORIS_AUTHOR = "Fabrizio Pollastri <mxgbot@gmail.com>";
 constexpr const char *METEORIS_HDF5_FORMAT = "meteoris v0";
 constexpr const char *METEORIS_HDF5_AUTHOR = "Fabrizio Pollastri";

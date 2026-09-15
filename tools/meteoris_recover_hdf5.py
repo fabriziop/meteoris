@@ -25,7 +25,27 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Sequence
 
-__version__ = "0.6.0"
+
+def _meteoris_version() -> str:
+    """Read the package version from the authoritative VERSION file."""
+    here = Path(__file__).resolve()
+    candidates = (
+        here.parent / "VERSION",
+        here.parent.parent / "VERSION",
+        here.parent.parent / "share" / "meteoris" / "VERSION",
+        Path(sys.prefix) / "share" / "meteoris" / "VERSION",
+    )
+    for version_file in candidates:
+        try:
+            value = version_file.read_text(encoding="utf-8").strip()
+        except OSError:
+            continue
+        if re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", value):
+            return value
+    raise RuntimeError("Cannot determine Meteoris version: VERSION file not found")
+
+
+__version__ = _meteoris_version()
 
 
 class RecoveryError(RuntimeError):
@@ -157,6 +177,7 @@ def build_parser() -> argparse.ArgumentParser:
             "modified; recovery is performed on a copy using h5clear."
         )
     )
+    parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     parser.add_argument("file", type=Path, help="HDF5 file to recover")
     parser.add_argument(
         "-o",

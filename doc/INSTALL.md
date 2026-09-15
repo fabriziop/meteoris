@@ -3,6 +3,13 @@
 Meteoris can be built and installed on X86 and ARM platforms.
 
 
+## Package version
+
+The root `VERSION` file is the single source of truth for the package version.
+CMake, the C++ executable, and the installed Python tools all derive their
+reported version from it. See [Versioning](VERSIONING.md) for the release
+workflow.
+
 ## Getting Meteoris
 
 Meteoris can be cloned of downloaded from the [github

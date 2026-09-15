@@ -2,6 +2,7 @@
 
 ```text
 meteoris/
+├── VERSION
 ├── CMakeLists.txt
 ├── CMakePresets.json
 ├── build.sh
@@ -13,6 +14,7 @@ meteoris/
 │       └── rpi3-trixie-aarch64.cmake
 ├── src/
 │   ├── meteoris.cpp
+│   ├── version.hpp.in
 │   ├── detector/
 │   │   ├── detector.hpp
 │   │   ├── detector_registry.cpp
@@ -25,7 +27,9 @@ meteoris/
 │   ├── CMakeLists.txt
 │   └── SoapyMeteorisSim.cpp
 ├── tests/
-│   └── echoes_automatic_detector_test.cpp
+│   ├── echoes_automatic_detector_test.cpp
+│   ├── meteoris_config_test.py
+│   └── version_consistency_test.py
 ├── tools/
 │   ├── meteoris_plot.py
 │   ├── meteoris_config.py
@@ -47,10 +51,16 @@ meteoris/
 │   ├── INSTALL.md
 │   ├── RECORDING_FORMAT.md
 │   ├── RECOVER_HDF5.md
+│   ├── VERSIONING.md
 │   └── meteoris_event_*.png
 ├── README.md
 └── LICENSE
 ```
+
+
+`VERSION` is the single authoritative package version. CMake derives
+`PROJECT_VERSION` from it, generates the C++ version header, and installs the
+file for the standalone Python commands. See `doc/VERSIONING.md`.
 
 The main executable is `src/meteoris.cpp`. Detector implementations are
 separated behind the detector interface in `src/detector/` and registered at

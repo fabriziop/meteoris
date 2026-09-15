@@ -11,9 +11,7 @@ from __future__ import annotations
 
 import argparse
 import ast
-import os
 import re
-import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -25,8 +23,6 @@ except ModuleNotFoundError:  # pragma: no cover - Python < 3.11
     tomllib = None
 
 
-VERSION = "1.1"
-METEORIS_VERSION_FALLBACK = "0.6.0"
 DEFAULT_INPUT = Path("meteoris.toml")
 DEFAULT_OUTPUT = Path("meteoris.toml.new")
 
@@ -378,38 +374,25 @@ def _review(parameters: list[Parameter], values: dict[str, Any]) -> None:
 
 
 def _meteoris_version() -> str:
-    """Return the Meteoris application version for the startup banner."""
-    # In a source checkout, CMakeLists.txt is the authoritative project version.
-    source_cmake = Path(__file__).resolve().parent.parent / "CMakeLists.txt"
-    if source_cmake.is_file():
+    """Read the package version from the authoritative VERSION file."""
+    here = Path(__file__).resolve()
+    candidates = (
+        here.parent / "VERSION",                         # CMake build tree
+        here.parent.parent / "VERSION",                  # source tree tools/
+        here.parent.parent / "share" / "meteoris" / "VERSION",  # installed bin/
+        Path(sys.prefix) / "share" / "meteoris" / "VERSION",
+    )
+    for version_file in candidates:
         try:
-            text = source_cmake.read_text(encoding="utf-8")
-            match = re.search(r"project\s*\(\s*Meteoris.*?VERSION\s+([0-9]+(?:\.[0-9]+)+)", text, re.S | re.I)
-            if match:
-                return match.group(1)
+            value = version_file.read_text(encoding="utf-8").strip()
         except OSError:
-            pass
-
-    # Installed/build-tree use: prefer the meteoris executable beside the wizard.
-    candidates = [
-        Path(sys.argv[0]).resolve().parent / "meteoris",
-        Path(__file__).resolve().parent / "meteoris",
-    ]
-    for executable in candidates:
-        if not executable.is_file() or not os.access(executable, os.X_OK):
             continue
-        try:
-            result = subprocess.run(
-                [str(executable), "--version"],
-                check=False, capture_output=True, text=True, timeout=2.0
-            )
-            match = re.search(r"\bmeteoris\s+([0-9]+(?:\.[0-9]+)+)", result.stdout, re.I)
-            if match:
-                return match.group(1)
-        except (OSError, subprocess.SubprocessError):
-            pass
-
-    return METEORIS_VERSION_FALLBACK
+        if re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", value):
+            return value
+    raise RuntimeError(
+        "Cannot determine Meteoris version: VERSION file not found beside the "
+        "source/build tree or installed share/meteoris directory."
+    )
 
 
 def _parameter_by_number(sections: list[Section]) -> dict[str, Parameter]:
@@ -480,7 +463,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="existing TOML used for proposed defaults (default: ./meteoris.toml when present)",
     )
     parser.add_argument("--mode", choices=("smart", "expert"), help="skip the mode question")
-    parser.add_argument("--version", action="version", version=f"meteoris_config {VERSION}")
+    parser.add_argument("--version", action="version", version=f"meteoris_config {_meteoris_version()}")
     return parser.parse_args(argv)
 
 

@@ -42,12 +42,12 @@ Examples:
 
 from __future__ import annotations
 
-__version__ = "0.6.0"
 __author__ = "Fabrizio Pollastri <mxgbot@gmail.com>"
 
 
 import argparse
 import datetime as dt
+import re
 import sys
 
 try:
@@ -57,6 +57,28 @@ except ImportError:
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
+
+
+def _meteoris_version() -> str:
+    """Read the package version from the authoritative VERSION file."""
+    here = Path(__file__).resolve()
+    candidates = (
+        here.parent / "VERSION",
+        here.parent.parent / "VERSION",
+        here.parent.parent / "share" / "meteoris" / "VERSION",
+        Path(sys.prefix) / "share" / "meteoris" / "VERSION",
+    )
+    for version_file in candidates:
+        try:
+            value = version_file.read_text(encoding="utf-8").strip()
+        except OSError:
+            continue
+        if re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", value):
+            return value
+    raise RuntimeError("Cannot determine Meteoris version: VERSION file not found")
+
+
+__version__ = _meteoris_version()
 
 try:
     import h5py

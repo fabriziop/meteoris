@@ -22,8 +22,9 @@ parameters.
 Meteoris has currently been tested on Ubuntu/Linux on X86 and on
 Pi OS trixie on Raspberry Pi 3B both with the [HackRF One
 SDR](https://hackrf.readthedocs.io/en/latest/hackrf_one.html).
-Meteoris is currently at version 0.6.0 and should therefore be considered alpha
-software.
+Meteoris should currently be considered alpha software. The authoritative package
+version is stored in the root `VERSION` file and is reported by all installed commands
+with `--version`.
 
 ### Author's Note
 
@@ -32,6 +33,18 @@ reviewed line by line. Only this README was originally handwritten. The
 authour provided the ideas, requirements, and some of the solutions.
 Without AI, this project probably would not exist.
 
+
+## Versioning
+
+`VERSION` at the repository root is the single authoritative package version.
+CMake reads it to set `PROJECT_VERSION`, generates the C++ `version.hpp`, copies it
+into the build tree for the Python tools, and installs it as
+`share/meteoris/VERSION`. Do not hard-code the current release number in sources or
+documentation. To make a release version change, edit `VERSION` only.
+
+All user-facing commands expose the same package version with `--version`:
+`meteoris`, `meteoris_plot`, `meteoris_config`, and `meteoris_recover_hdf5`.
+See [`doc/VERSIONING.md`](doc/VERSIONING.md) for the release/version workflow.
 
 # Main Features
 

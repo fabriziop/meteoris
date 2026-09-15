@@ -16,8 +16,8 @@ meteoris_config --mode expert existing.toml
 ```
 
 
-This document describes the `meteoris.toml` configuration file used by
-Meteoris 0.6.0.
+This document describes the `meteoris.toml` configuration file used by the
+current Meteoris source tree.
 
 Meteoris reads configuration values from TOML sections and then applies any
 command-line overrides. The precedence is:
@@ -541,7 +541,8 @@ The command-line options:
 
 override the TOML setting.
 
-When daemonized, operational messages are written to the configured text log file. Syslog is not used.
+When daemonized, operational messages are written to the configured text
+log file. Syslog is not used.
 
 ## `run_seconds`
 
@@ -1638,7 +1639,8 @@ direct_buffer = true
 # FIR1 block-kernel worker count.
 # 1 uses SIMD on one core and is the safest default.
 # 2 splits FIR1 outputs across the caller plus one persistent worker thread.
-# Benchmark both values on the target CPU; two threads help only when FIR1 is CPU-bound.
+# Benchmark both values on the target CPU; two threads help only when FIR1
+# is CPU-bound.
 fir1_threads = 1
 
 [logging]
@@ -1654,13 +1656,16 @@ file_truncate = false
 
 [agc]
 # Low-cost AGC based on clipping of native CS8 ADC samples. The clipping count
-# is collected during the existing 10 Msps DSP pass, so no extra input scan is done.
+# is collected during the existing 10 Msps DSP pass, so no extra input scanxi
+# is done.
 enabled = false
-# Keep the exponentially-smoothed fraction of clipped complex samples near/below this value.
+# Keep the exponentially-smoothed fraction of clipped complex samples
+# near/below this value.
 target_saturation_percent = 1.0
 # Response/smoothing time constant. Larger values reduce gain pumping.
 time_constant_s = 2.0
-# Treat I or Q magnitudes at/above this native CS8 level as saturated/near-saturated.
+# Treat I or Q magnitudes at/above this native CS8 level as
+# saturated/near-saturated.
 clip_level = 126
 # -1 uses the gain range reported by the Soapy driver.
 min_gain_db = -1
@@ -1723,7 +1728,8 @@ max_hz = 50000
 max_df_hz = 1500
 activation_time_s = 0.05
 activation_fraction = 0.70
-# Chirp tracks are allowed only short gaps because prediction uncertainty grows fast.
+# Chirp tracks are allowed only short gaps because prediction uncertainty
+# grows fast.
 lost_s = 0.08
 # Average drift range used to classify a generic tentative track as a chirp.
 min_drift_hz_s = 3000
@@ -1750,12 +1756,12 @@ swmr_flush_seconds = 1.0
 daily_rotate_time = "00:00"
 
 # Stop Meteoris if the HDF5 file grows faster than this sustained rate.
-# The rate is checked over 10-second windows to ignore short HDF5 allocation bursts.
-# 0 disables the growth-rate safety check.
+# The rate is checked over 10-second windows to ignore short HDF5
+# allocation bursts. 0 disables the growth-rate safety check.
 max_growth_mb_per_min = 100
 
-# Stop Meteoris when available space on the output filesystem falls below this value.
-# 0 disables the free-space safety check.
+# Stop Meteoris when available space on the output filesystem falls below
+# this value. 0 disables the free-space safety check.
 min_free_space_gb = 2
 ```
 
@@ -1784,4 +1790,5 @@ to be much cheaper than the high-rate NCO/FIR pipeline.
 
 ---
 
-Copyright (c) 2026 Fabrizio Pollastri. Licensed under the GNU General Public License v3.0; see `LICENSE`.
+Copyright (c) 2026 Fabrizio Pollastri. Licensed under the GNU General Public
+License v3.0; see `LICENSE`.

@@ -41,9 +41,11 @@ For a native Raspberry Pi build:
 ./build_rpi3.sh
 ```
 
-The menu has two modes, and **both include** `meteoris_config` and `meteoris_recover_hdf5`:
+The menu has two modes, and **both include** `meteoris_config` and
+`meteoris_recover_hdf5`:
 
-- full: `meteoris` + `meteoris_plot` + `meteoris_config` + `meteoris_recover_hdf5`
+- full: `meteoris` + `meteoris_plot` + `meteoris_config` +xi
+  `meteoris_recover_hdf5`
 - recorder-only: `meteoris` + `meteoris_config` + `meteoris_recover_hdf5`
 
 The recovery helper requires the distro HDF5 command-line tools (`h5dump`,
@@ -105,7 +107,8 @@ directory = "./data"
 
 `center_frequency`, `shift_hz`, gain, and detector settings must be chosen for
 the receiver and transmitter being observed. See the configuration sections in
-[README.md](../README.md) and [CONFIG_FILE_REFERENCE.md](CONFIG_FILE_REFERENCE.md).
+[README.md](../README.md) and
+[CONFIG_FILE_REFERENCE.md](CONFIG_FILE_REFERENCE.md).
 
 ## 4. Run Meteoris
 
@@ -137,6 +140,9 @@ Show the version:
 
 ```bash
 meteoris --version
+meteoris_plot --version
+meteoris_config --version
+meteoris_recover_hdf5 --version
 ```
 
 With the default output settings, daily HDF5 files are written as:

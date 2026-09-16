@@ -227,9 +227,10 @@ If no destination was selected with `n`, `w` uses:
 meteoris_saved.h5
 ```
 
-The **Max PSD**, **Trigger**, and **Grid** buttons control the corresponding
-plot overlays/displays. PSD color limits can be adjusted interactively with the
-sliders.
+The **Max PSD** button toggles the upper PSD summary panel, which plots both
+the maximum and median PSD density across frequency bins for each time frame.
+The **Trigger** and **Grid** buttons control the corresponding overlays/displays.
+PSD color limits can be adjusted interactively with the sliders.
 
 ## 8. Live viewing
 

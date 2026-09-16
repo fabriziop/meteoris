@@ -25,7 +25,7 @@ The program:
     - saves the currently displayed event data to that file with W;
     - terminate the interactive browser with Q or by closing the window;
   - provides interactive PSD color-scale minimum/maximum sliders;
-  - provides show/hide controls for the max-PSD trace, X/Y grid, and trigger markers;
+  - provides show/hide controls for the max/median-PSD traces, X/Y grid, and trigger markers;
   - marks trigger ON/OFF positions;
   - can save selected event plots as PNG files.
 
@@ -573,8 +573,8 @@ def plot_event(
     t_num = mdates.date2num(t_dt)
 
     # Two vertically stacked plots share the UTC time axis. The compact upper
-    # plot shows, for each waterfall time column, the maximum PSD density over
-    # all frequency bins.
+    # plot shows, for each waterfall time column, the maximum and median
+    # PSD density over all frequency bins.
     # Interactive browsing reuses one Matplotlib Figure/window across events.
     # Clearing the Figure removes all event-specific axes, colorbars and widgets
     # while leaving the GUI window itself alive (and therefore preserving its
@@ -615,8 +615,11 @@ def plot_event(
         rasterized=True,
     )
     max_psd_db = np.max(db, axis=1)
-    ax_max_power.plot(t_num, max_psd_db, linewidth=1.1)
-    ax_max_power.set_ylabel("Max PSD\n(dB/Hz)")
+    median_psd_db = np.median(db, axis=1)
+    ax_max_power.plot(t_num, max_psd_db, linewidth=1.1, label="Max")
+    ax_max_power.plot(t_num, median_psd_db, linewidth=1.1, label="Median")
+    ax_max_power.set_ylabel("PSD\n(dB/Hz)")
+    ax_max_power.legend(loc="upper right")
     ax_max_power.grid(True, which="major", axis="both", alpha=0.25)
 
     ax.xaxis_date()

@@ -382,9 +382,9 @@ current data.
 The viewer also provides interactive PSD color-limit sliders and controls for
 the display:
 
-- **Max PSD** toggles a plot stacked above the waterfall. Its Y axis shows the
-  maximum PSD density (dB/Hz) across all displayed frequency bins for each time
-  column. The upper plot shares the waterfall time axis and repeats the time
+- **Max PSD** toggles a plot stacked above the waterfall. It shows both the
+  maximum and median PSD density (dB/Hz) across all displayed frequency bins for
+  each time column. The upper plot shares the waterfall time axis and repeats the time
   ticks at the top. When the Max PSD plot is hidden, the waterfall expands to
   use the released vertical space; enabling it restores the stacked layout.
 - **Trigger** shows or hides detector trigger markers.

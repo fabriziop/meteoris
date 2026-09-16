@@ -105,6 +105,9 @@ class PlotConfig:
     slider_step_db: float = 1.0
     figure_width: float = 11.5
     figure_height: float = 7.2
+    button_max_psd: bool = True
+    button_trigger: bool = True
+    button_grid: bool = False
 
 
 def load_plot_config(path: Path) -> PlotConfig:
@@ -117,6 +120,7 @@ def load_plot_config(path: Path) -> PlotConfig:
         data = tomllib.load(f)
     plot = data.get("plot", {})
     scale = data.get("color_scale", {})
+    buttons = data.get("buttons", {})
     if "db_min" in scale:
         cfg.db_min = float(scale["db_min"])
     if "db_max" in scale:
@@ -131,6 +135,15 @@ def load_plot_config(path: Path) -> PlotConfig:
         cfg.figure_width = float(plot["figure_width"])
     if "figure_height" in plot:
         cfg.figure_height = float(plot["figure_height"])
+    for key in ("max_psd", "trigger", "grid"):
+        if key in buttons and not isinstance(buttons[key], bool):
+            raise ValueError(f"buttons.{key} must be true or false")
+    if "max_psd" in buttons:
+        cfg.button_max_psd = buttons["max_psd"]
+    if "trigger" in buttons:
+        cfg.button_trigger = buttons["trigger"]
+    if "grid" in buttons:
+        cfg.button_grid = buttons["grid"]
     if cfg.slider_max_db <= cfg.slider_min_db:
         raise ValueError("color_scale.slider_max_db must be greater than slider_min_db")
     if cfg.slider_step_db <= 0:
@@ -666,13 +679,18 @@ def plot_event(
     ax.set_xlabel("Time (UTC)")
     ax.set_ylabel("Frequency offset (kHz)")
 
-    # X/Y grid, disabled by default. A button below the waterfall toggles the
-    # major grid without changing the PSD data or color normalization.
-    grid_state = {"visible": False}
+    # X/Y grid initial visibility comes from meteoris_plot.toml. A button below
+    # the waterfall toggles the major grid without changing the PSD data or
+    # color normalization.
+    grid_state = {"visible": plot_cfg.button_grid}
     # Draw the grid above the waterfall QuadMesh; otherwise it can be hidden
     # underneath the coloured PSD map.
     ax.set_axisbelow(False)
-    ax.grid(False, which="major", axis="both")
+    if grid_state["visible"]:
+        ax.grid(True, which="major", axis="both",
+                linewidth=1.15, alpha=0.85, zorder=10)
+    else:
+        ax.grid(False, which="major", axis="both")
 
     title = (
         f"Meteoris event {ev.ordinal}/{total_events} (stored event_id={ev.stored_event_id}) - "
@@ -719,9 +737,9 @@ def plot_event(
     # Mark every trigger ON/OFF transition. Retriggers that occur during the
     # post-trigger tail are intentionally merged into the same Meteoris event,
     # so an event may contain several active/post-active intervals.
-    max_power_state = {"visible": True}
+    max_power_state = {"visible": plot_cfg.button_max_psd}
     trigger_lines = []
-    trigger_state = {"visible": True}
+    trigger_state = {"visible": plot_cfg.button_trigger}
     trigger_legend = None
     if "/psd/detector_state" in h5:
         state = np.asarray(h5["/psd/detector_state"][ev.start_row:visible_stop], dtype=np.uint8)
@@ -779,9 +797,24 @@ def plot_event(
                    valinit=vmin, valstep=plot_cfg.slider_step_db)
     s_max = Slider(ax_max, "Color max (dB/Hz)", slider_lo, slider_hi,
                    valinit=vmax, valstep=plot_cfg.slider_step_db)
-    b_max_power = Button(ax_max_toggle, "Max PSD: ON")
-    b_trigger = Button(ax_trigger, "Trigger: ON")
-    b_grid = Button(ax_grid, "Grid: OFF")
+    b_max_power = Button(
+        ax_max_toggle, "Max PSD: ON" if max_power_state["visible"] else "Max PSD: OFF"
+    )
+    b_trigger = Button(
+        ax_trigger, "Trigger: ON" if trigger_state["visible"] else "Trigger: OFF"
+    )
+    b_grid = Button(ax_grid, "Grid: ON" if grid_state["visible"] else "Grid: OFF")
+
+    # Apply configured initial toggle states before the first draw.
+    if not max_power_state["visible"]:
+        ax_max_power.set_visible(False)
+        ax.set_position(full_stack_pos)
+        cax.set_position(cbar_off_pos)
+    if not trigger_state["visible"]:
+        for line in trigger_lines:
+            line.set_visible(False)
+        if trigger_legend is not None:
+            trigger_legend.set_visible(False)
 
     def update_scale(_value=None):
         lo = float(s_min.val)

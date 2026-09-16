@@ -14,3 +14,13 @@ slider_step_db = 1.0
 [plot]
 figure_width = 11.5
 figure_height = 7.2
+
+[buttons]
+# Initial state of the Max PSD summary panel button.
+max_psd = true
+
+# Initial visibility of trigger ON/OFF markers.
+trigger = true
+
+# Initial visibility of the waterfall major grid.
+grid = false

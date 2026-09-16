@@ -389,6 +389,20 @@ the display:
   use the released vertical space; enabling it restores the stacked layout.
 - **Trigger** shows or hides detector trigger markers.
 - **Grid** shows or hides the plot grid.
+
+The initial ON/OFF state of these three buttons is configurable in
+`meteoris_plot.toml`:
+
+```toml
+[buttons]
+max_psd = true
+trigger = true
+grid = false
+```
+
+These values are defaults for each event when it is displayed; clicking a
+button changes only the current plot.
+
 - The display header identifies the Meteoris version and shows the current
   event as `<event>/<total events in file>`, together with the recorded-data
   filename and the existing event information.

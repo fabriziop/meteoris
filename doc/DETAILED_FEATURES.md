@@ -131,6 +131,9 @@ Here is a concise list of the main **Meteoris** features as developed so far:
   * Gqrx-like waterfall color map.
   * Time on X axis, frequency on Y axis, PSD density by color.
   * Interactive minimum/maximum color-scale sliders.
+  * Full/half PSD bandwidth button; half mode displays the central 50% of the
+    recorded frequency span and is the default in `meteoris_plot.toml`.
+  * Max/Median summary values follow the currently displayed bandwidth.
   * Toggleable X/Y grid.
   * Toggleable high-visibility trigger markers.
   * Displays **all ON/OFF/retrigger transitions**.

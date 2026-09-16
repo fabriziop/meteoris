@@ -385,6 +385,9 @@ current data.
 The viewer also provides interactive PSD color-limit sliders and controls for
 the display:
 
+- **Band: HALF/FULL** switches the waterfall between the central 50% of the
+  recorded PSD bandwidth and the complete recorded bandwidth. The Max/Median
+  summary is recalculated over the same displayed frequency bins.
 - **Max PSD** toggles a plot stacked above the waterfall. It shows both the
   maximum and median PSD density (dB/Hz) across all displayed frequency bins for
   each time column. The upper plot shares the waterfall time axis and repeats the time
@@ -393,11 +396,12 @@ the display:
 - **Trigger** shows or hides detector trigger markers.
 - **Grid** shows or hides the plot grid.
 
-The initial ON/OFF state of these three buttons is configurable in
-`meteoris_plot.toml`:
+The initial button states/mode are configurable in `meteoris_plot.toml`. Half
+band is the default:
 
 ```toml
 [buttons]
+bandwidth = "half"   # "half" or "full"
 max_psd = true
 trigger = true
 grid = false

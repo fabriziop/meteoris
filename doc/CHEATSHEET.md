@@ -227,13 +227,15 @@ If no destination was selected with `n`, `w` uses:
 meteoris_saved.h5
 ```
 
-The **Max PSD** button toggles the upper PSD summary panel, which plots both
-the maximum and median PSD density across frequency bins for each time frame.
-The **Trigger** and **Grid** buttons control the corresponding overlays/displays.
-Their initial states, together with **Max PSD**, come from `meteoris_plot.toml`:
+The **Band: HALF/FULL** button switches between the central 50% and the full
+recorded PSD bandwidth. The **Max PSD** button toggles the upper summary panel,
+which plots both maximum and median PSD density over the currently displayed
+frequency bins. **Trigger** and **Grid** control their corresponding overlays.
+Initial states/mode come from `meteoris_plot.toml`:
 
 ```toml
 [buttons]
+bandwidth = "half"   # default; or "full"
 max_psd = true
 trigger = true
 grid = false

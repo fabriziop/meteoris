@@ -25,7 +25,7 @@ The program:
     - saves the currently displayed event data to that file with W;
     - terminate the interactive browser with Q or by closing the window;
   - provides interactive PSD color-scale minimum/maximum sliders;
-  - provides show/hide controls for the max/median-PSD traces, X/Y grid, and trigger markers;
+  - provides controls for full/half PSD bandwidth, max/median-PSD traces, X/Y grid, and trigger markers;
   - marks trigger ON/OFF positions;
   - can save selected event plots as PNG files.
 
@@ -109,6 +109,7 @@ class PlotConfig:
     button_max_psd: bool = True
     button_trigger: bool = True
     button_grid: bool = False
+    button_bandwidth: str = "half"
 
 
 def load_plot_config(path: Path) -> PlotConfig:
@@ -145,6 +146,10 @@ def load_plot_config(path: Path) -> PlotConfig:
     for key in ("max_psd", "trigger", "grid"):
         if key in buttons and not isinstance(buttons[key], bool):
             raise ValueError(f"buttons.{key} must be true or false")
+    if "bandwidth" in buttons:
+        cfg.button_bandwidth = str(buttons["bandwidth"]).strip().lower()
+    if cfg.button_bandwidth not in ("half", "full"):
+        raise ValueError("buttons.bandwidth must be 'half' or 'full'")
     if "max_psd" in buttons:
         cfg.button_max_psd = buttons["max_psd"]
     if "trigger" in buttons:
@@ -587,6 +592,21 @@ def plot_event(
     if vmax <= vmin:
         raise ValueError("--db-max must be greater than --db-min")
 
+    # The bandwidth control changes the visible frequency range without
+    # altering the recorded data. "half" means the central 50% of the full
+    # recorded frequency span. The Max/Median summary is calculated over the
+    # same currently displayed bins so the two panels remain consistent.
+    freq_min_hz = float(np.min(freq_hz))
+    freq_max_hz = float(np.max(freq_hz))
+    freq_center_hz = 0.5 * (freq_min_hz + freq_max_hz)
+    freq_span_hz = freq_max_hz - freq_min_hz
+    half_lo_hz = freq_center_hz - 0.25 * freq_span_hz
+    half_hi_hz = freq_center_hz + 0.25 * freq_span_hz
+    half_band_mask = (freq_hz >= half_lo_hz) & (freq_hz <= half_hi_hz)
+    if not np.any(half_band_mask):
+        # Degenerate/tiny axes still need at least one bin for summary traces.
+        half_band_mask[int(np.argmin(np.abs(freq_hz - freq_center_hz)))] = True
+
     # Matplotlib dates are days. pcolormesh handles actual PSD timestamps and
     # therefore also shows small irregularities/gaps faithfully.
     t_dt = [ns_to_utc(int(x)) for x in ts_ns]
@@ -666,10 +686,18 @@ def plot_event(
         vmax=vmax,
         rasterized=True,
     )
-    max_psd_db = np.max(db, axis=1)
-    median_psd_db = np.median(db, axis=1)
-    ax_max_power.plot(t_num, max_psd_db, linewidth=1.1, label="Max")
-    ax_max_power.plot(t_num, median_psd_db, linewidth=1.1, label="Median")
+    bandwidth_state = {"mode": plot_cfg.button_bandwidth}
+
+    def bandwidth_mask():
+        if bandwidth_state["mode"] == "half":
+            return half_band_mask
+        return np.ones(freq_hz.shape, dtype=bool)
+
+    initial_band_mask = bandwidth_mask()
+    max_psd_db = np.max(db[:, initial_band_mask], axis=1)
+    median_psd_db = np.median(db[:, initial_band_mask], axis=1)
+    max_psd_line, = ax_max_power.plot(t_num, max_psd_db, linewidth=1.1, label="Max")
+    median_psd_line, = ax_max_power.plot(t_num, median_psd_db, linewidth=1.1, label="Median")
     ax_max_power.set_ylabel("PSD\n(dB/Hz)")
     ax_max_power.legend(loc="upper right")
     ax_max_power.grid(True, which="major", axis="both", alpha=0.25)
@@ -692,6 +720,9 @@ def plot_event(
     )
     ax.set_xlabel("Time (UTC)")
     ax.set_ylabel("Frequency offset (kHz)")
+    full_band_ylim_khz = (freq_min_hz / 1000.0, freq_max_hz / 1000.0)
+    half_band_ylim_khz = (half_lo_hz / 1000.0, half_hi_hz / 1000.0)
+    ax.set_ylim(*(half_band_ylim_khz if bandwidth_state["mode"] == "half" else full_band_ylim_khz))
 
     # X/Y grid initial visibility comes from meteoris_plot.toml. A button below
     # the waterfall toggles the major grid without changing the PSD data or
@@ -804,6 +835,7 @@ def plot_event(
     slider_hi = max(plot_cfg.slider_max_db, vmax + 1.0)
     ax_min = fig.add_axes([0.14, 0.115, 0.70, 0.025])
     ax_max = fig.add_axes([0.14, 0.070, 0.70, 0.025])
+    ax_bandwidth = fig.add_axes([0.42, 0.020, 0.13, 0.035])
     ax_max_toggle = fig.add_axes([0.57, 0.020, 0.13, 0.035])
     ax_trigger = fig.add_axes([0.72, 0.020, 0.12, 0.035])
     ax_grid = fig.add_axes([0.86, 0.020, 0.10, 0.035])
@@ -811,6 +843,9 @@ def plot_event(
                    valinit=vmin, valstep=plot_cfg.slider_step_db)
     s_max = Slider(ax_max, "Color max (dB/Hz)", slider_lo, slider_hi,
                    valinit=vmax, valstep=plot_cfg.slider_step_db)
+    b_bandwidth = Button(
+        ax_bandwidth, f"Band: {bandwidth_state['mode'].upper()}"
+    )
     b_max_power = Button(
         ax_max_toggle, "Max PSD: ON" if max_power_state["visible"] else "Max PSD: OFF"
     )
@@ -837,6 +872,19 @@ def plot_event(
         if hi <= lo:
             return
         mesh.set_clim(lo, hi)
+        fig.canvas.draw_idle()
+
+    def toggle_bandwidth(_event=None):
+        bandwidth_state["mode"] = (
+            "full" if bandwidth_state["mode"] == "half" else "half"
+        )
+        mask = bandwidth_mask()
+        ax.set_ylim(*(half_band_ylim_khz if bandwidth_state["mode"] == "half" else full_band_ylim_khz))
+        max_psd_line.set_ydata(np.max(db[:, mask], axis=1))
+        median_psd_line.set_ydata(np.median(db[:, mask], axis=1))
+        ax_max_power.relim()
+        ax_max_power.autoscale_view(scalex=False, scaley=True)
+        b_bandwidth.label.set_text(f"Band: {bandwidth_state['mode'].upper()}")
         fig.canvas.draw_idle()
 
     def toggle_max_power(_event=None):
@@ -882,11 +930,14 @@ def plot_event(
 
     s_min.on_changed(update_scale)
     s_max.on_changed(update_scale)
+    b_bandwidth.on_clicked(toggle_bandwidth)
     b_max_power.on_clicked(toggle_max_power)
     b_trigger.on_clicked(toggle_triggers)
     b_grid.on_clicked(toggle_grid)
-    # Keep widget references alive for the lifetime of the figure.
-    fig._meteoris_widgets = (s_min, s_max, b_max_power, b_trigger, b_grid)
+    # Keep widget references alive for the lifetime of the figure. Keep the
+    # established Max/Trigger/Grid indices stable for callers/tests and append
+    # the bandwidth control.
+    fig._meteoris_widgets = (s_min, s_max, b_max_power, b_trigger, b_grid, b_bandwidth)
 
     # Keyboard navigation:
     #   SPACE/ENTER                -> next event

@@ -95,7 +95,7 @@ class WidgetReuseTest(unittest.TestCase):
                     else:
                         self.assertEqual(counts, baseline_counts)
 
-                self.assertEqual(len(fig._meteoris_widgets), 5)
+                self.assertEqual(len(fig._meteoris_widgets), 6)
 
                 # The fifth plot's Max PSD button must still invoke its callback.
                 max_psd_button = fig._meteoris_widgets[2]
@@ -162,6 +162,7 @@ class WidgetReuseTest(unittest.TestCase):
                     self.assertEqual(widgets[2].label.get_text(), "Max PSD: OFF")
                     self.assertEqual(widgets[3].label.get_text(), "Trigger: OFF")
                     self.assertEqual(widgets[4].label.get_text(), "Grid: ON")
+                    self.assertEqual(widgets[5].label.get_text(), "Band: HALF")
 
                     trigger_lines = [
                         line for line in waterfall_axis.lines
@@ -171,6 +172,76 @@ class WidgetReuseTest(unittest.TestCase):
                     marker_lines = [line for line in waterfall_axis.lines if line.get_linestyle() in ("--", ":")]
                     self.assertTrue(marker_lines)
                     self.assertTrue(all(not line.get_visible() for line in marker_lines))
+
+
+    def test_bandwidth_default_toggle_and_summary_follow_visible_band(self):
+        mp = load_plot_module()
+        with tempfile.TemporaryDirectory() as tmp:
+            h5_path = Path(tmp) / "band-test.h5"
+            freq = np.linspace(-4000.0, 4000.0, 9)
+            # Outer bins deliberately dominate so Full and Half summaries differ.
+            db_rows = np.array([
+                [-30, -80, -70, -60, -50, -60, -70, -80, -20],
+                [-25, -85, -75, -65, -55, -65, -75, -85, -15],
+            ], dtype=np.float32)
+            power = np.power(10.0, db_rows / 10.0).astype(np.float32)
+            with h5py.File(h5_path, "w") as h5:
+                psd = h5.create_group("psd")
+                psd.create_dataset("frequency_hz", data=freq)
+                psd.create_dataset("power_density", data=power)
+                psd.create_dataset(
+                    "timestamp_ns",
+                    data=np.array([1_700_000_000_000_000_000, 1_700_000_000_100_000_000], dtype=np.uint64),
+                )
+                h5.create_group("metadata").attrs["software_version"] = mp.__version__
+
+            with h5py.File(h5_path, "r") as h5:
+                ts = h5["/psd/timestamp_ns"][:]
+                event = mp.EventSegment(
+                    ordinal=1, stored_event_id=1, start_row=0, stop_row=2,
+                    start_ns=int(ts[0]), stop_ns=int(ts[-1]),
+                )
+                cfg = mp.PlotConfig(button_bandwidth="half")
+                fig, _ = mp.plot_event(
+                    h5, event, 1, mp.gqrx_colormap(), None, None, None, cfg, None
+                )
+                waterfall_axis = fig.axes[1]
+                max_axis = fig.axes[0]
+                band_button = fig._meteoris_widgets[5]
+
+                self.assertEqual(band_button.label.get_text(), "Band: HALF")
+                lo, hi = waterfall_axis.get_ylim()
+                self.assertAlmostEqual(lo, -2.0)
+                self.assertAlmostEqual(hi, 2.0)
+                half_mask = (freq >= -2000.0) & (freq <= 2000.0)
+                np.testing.assert_allclose(
+                    max_axis.lines[0].get_ydata(), np.max(db_rows[:, half_mask], axis=1), atol=1e-4
+                )
+                np.testing.assert_allclose(
+                    max_axis.lines[1].get_ydata(), np.median(db_rows[:, half_mask], axis=1), atol=1e-4
+                )
+
+                band_button._observers.process("clicked", None)
+                self.assertEqual(band_button.label.get_text(), "Band: FULL")
+                lo, hi = waterfall_axis.get_ylim()
+                self.assertAlmostEqual(lo, -4.0)
+                self.assertAlmostEqual(hi, 4.0)
+                np.testing.assert_allclose(
+                    max_axis.lines[0].get_ydata(), np.max(db_rows, axis=1), atol=1e-4
+                )
+                np.testing.assert_allclose(
+                    max_axis.lines[1].get_ydata(), np.median(db_rows, axis=1), atol=1e-4
+                )
+
+    def test_bandwidth_config_validation(self):
+        mp = load_plot_module()
+        with tempfile.TemporaryDirectory() as tmp:
+            cfg_path = Path(tmp) / "plot.toml"
+            cfg_path.write_text('[buttons]\nbandwidth = "full"\n', encoding="utf-8")
+            self.assertEqual(mp.load_plot_config(cfg_path).button_bandwidth, "full")
+            cfg_path.write_text('[buttons]\nbandwidth = "quarter"\n', encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "buttons.bandwidth"):
+                mp.load_plot_config(cfg_path)
 
 
     def test_window_mode_config_and_validation(self):

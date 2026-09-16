@@ -97,6 +97,18 @@ class WidgetReuseTest(unittest.TestCase):
 
                 self.assertEqual(len(fig._meteoris_widgets), 6)
 
+                # The two color sliders share one horizontal control row.
+                min_slider, max_slider = fig._meteoris_widgets[:2]
+                self.assertAlmostEqual(
+                    min_slider.ax.get_position().y0,
+                    max_slider.ax.get_position().y0,
+                    places=6,
+                )
+                self.assertLess(
+                    min_slider.ax.get_position().x1,
+                    max_slider.ax.get_position().x0,
+                )
+
                 # The fifth plot's Max PSD button must still invoke its callback.
                 max_psd_button = fig._meteoris_widgets[2]
                 max_psd_axis = fig.axes[0]

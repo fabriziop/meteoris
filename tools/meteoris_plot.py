@@ -673,7 +673,7 @@ def plot_event(
             "left": 0.10,
             "right": 0.88,
             "top": 0.90,
-            "bottom": 0.24,
+            "bottom": 0.20,
         },
     )
     mesh = ax.pcolormesh(
@@ -833,12 +833,14 @@ def plot_event(
     # and automatically expanded if the initial limits fall outside them.
     slider_lo = min(plot_cfg.slider_min_db, vmin - 1.0)
     slider_hi = max(plot_cfg.slider_max_db, vmax + 1.0)
-    ax_min = fig.add_axes([0.14, 0.115, 0.70, 0.025])
-    ax_max = fig.add_axes([0.14, 0.070, 0.70, 0.025])
-    ax_bandwidth = fig.add_axes([0.42, 0.020, 0.13, 0.035])
-    ax_max_toggle = fig.add_axes([0.57, 0.020, 0.13, 0.035])
-    ax_trigger = fig.add_axes([0.72, 0.020, 0.12, 0.035])
-    ax_grid = fig.add_axes([0.86, 0.020, 0.10, 0.035])
+    # Keep the two colour-scale sliders on one row.  Besides making the
+    # controls easier to scan, this reclaims vertical space for the PSD plots.
+    ax_min = fig.add_axes([0.16, 0.095, 0.28, 0.025])
+    ax_max = fig.add_axes([0.61, 0.095, 0.28, 0.025])
+    ax_bandwidth = fig.add_axes([0.42, 0.025, 0.13, 0.035])
+    ax_max_toggle = fig.add_axes([0.57, 0.025, 0.13, 0.035])
+    ax_trigger = fig.add_axes([0.72, 0.025, 0.12, 0.035])
+    ax_grid = fig.add_axes([0.86, 0.025, 0.10, 0.035])
     s_min = Slider(ax_min, "Color min (dB/Hz)", slider_lo, slider_hi,
                    valinit=vmin, valstep=plot_cfg.slider_step_db)
     s_max = Slider(ax_max, "Color max (dB/Hz)", slider_lo, slider_hi,

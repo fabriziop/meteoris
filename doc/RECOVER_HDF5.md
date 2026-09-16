@@ -2,21 +2,38 @@
 
 This runbook describes conservative recovery procedures for an HDF5 output file that cannot be opened after a crash, forced termination, power loss, or system shutdown. It is intended for Meteoris output files but uses standard HDF5 tools.
 
-> **Important:** Work on a copy. HDF5 recovery tools can make a damaged file easier to inspect, but they cannot reconstruct data that was never flushed to disk or repair every form of metadata corruption.
+> **Important:** Recovering to a separate copy is strongly recommended. The helper can recover in place when explicitly selected, but that directly mutates the input HDF5 file and can reduce later recovery options. HDF5 recovery tools cannot reconstruct data that was never flushed to disk or repair every form of metadata corruption.
 
 For the common unclean-shutdown case, Meteoris includes a conservative helper
-that automates the safe subset of this runbook while preserving the original.
-The helper is included in **both** Raspberry Pi build modes (full and
-recorder-only) and is installed as `meteoris_recover_hdf5`:
+that automates the safe subset of this runbook. The helper is included in
+**both** Raspberry Pi build modes (full and recorder-only) and is installed as
+`meteoris_recover_hdf5`:
 
 ```bash
 meteoris_recover_hdf5 /absolute/path/to/output.h5
 ```
 
-By default it creates `output.h5.recovery`, records diagnostics beside that
-copy, and, if the normal `h5dump` probe fails, captures the full HDF5 error stack
-before deciding whether any mutation is justified. It clears a stale write/SWMR
-consistency flag only when that error stack identifies the condition, and uses
+Interactive use asks where recovery should occur:
+
+```text
+Recovery destination:
+  1) Other file (recommended): /absolute/path/to/output.h5.recovery
+  2) In place (WARNING: modifies the input file)
+Choice [1]:
+```
+
+Option 1 is the default and preserves the original file. It then asks for the
+recovery filename, defaulting to `output.h5.recovery`. Option 2 operates on the
+input file itself and displays a prominent warning followed by a second
+`Recover this file IN PLACE? [y/N]` confirmation before recovery starts.
+In-place recovery should normally be used only when making a separate copy is
+impractical and the data-risk tradeoff is understood.
+
+For non-interactive use, `--output FILE` selects copy recovery without the
+prompt and `--in-place` explicitly selects direct recovery. Diagnostics are
+written beside the file being recovered. The helper captures the full HDF5
+error stack before deciding whether mutation is justified, clears a stale
+write/SWMR consistency flag only when that condition is identified, and uses
 `h5clear --increment` only after confirming an EOA/EOF mismatch. Use the manual
 procedure below for unusual failures or application-level validation.
 

@@ -333,11 +333,14 @@ a copy conservatively with:
 
 ```bash
 meteoris_recover_hdf5 data/meteoris_YYYYMMDD.h5
+# Interactive prompt: recover to another file (recommended) or in place.
+# Non-interactive: --output FILE or --in-place.
 ```
 
-The original file is never modified. The helper clears only a detected stale
-HDF5 writer flag and uses `h5clear --increment` only when an EOA/EOF mismatch
-is confirmed. See [Recover HDF5 Output Files](./doc/RECOVER_HDF5.md) for the
+The default/recommended choice recovers to a separate file and leaves the
+original untouched. In-place recovery is also available after a warning and
+explicit confirmation. The helper clears only a detected stale HDF5 writer
+flag and uses `h5clear --increment` only when an EOA/EOF mismatch is confirmed. See [Recover HDF5 Output Files](./doc/RECOVER_HDF5.md) for the
 manual procedure, validation steps, and stop conditions.
 
 

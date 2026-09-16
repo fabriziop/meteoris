@@ -403,6 +403,19 @@ grid = false
 These values are defaults for each event when it is displayed; clicking a
 button changes only the current plot.
 
+The GUI window state is also controlled by `meteoris_plot.toml`:
+
+```toml
+[plot]
+window_mode = "maximized"   # "maximized" or "normal"
+figure_width = 11.5         # used in normal mode
+figure_height = 7.2         # used in normal mode
+```
+
+`window_mode` is enforced after every event redraw, so a maximized viewer stays
+maximized while navigating. In `normal` mode, every event uses the configured
+figure width and height.
+
 - The display header identifies the Meteoris version and shows the current
   event as `<event>/<total events in file>`, together with the recorded-data
   filename and the existing event information.

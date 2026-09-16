@@ -105,6 +105,7 @@ class PlotConfig:
     slider_step_db: float = 1.0
     figure_width: float = 11.5
     figure_height: float = 7.2
+    window_mode: str = "maximized"
     button_max_psd: bool = True
     button_trigger: bool = True
     button_grid: bool = False
@@ -135,6 +136,12 @@ def load_plot_config(path: Path) -> PlotConfig:
         cfg.figure_width = float(plot["figure_width"])
     if "figure_height" in plot:
         cfg.figure_height = float(plot["figure_height"])
+    if "window_mode" in plot:
+        cfg.window_mode = str(plot["window_mode"]).strip().lower()
+    if cfg.window_mode not in ("maximized", "normal"):
+        raise ValueError("plot.window_mode must be 'maximized' or 'normal'")
+    if cfg.figure_width <= 0 or cfg.figure_height <= 0:
+        raise ValueError("plot.figure_width and plot.figure_height must be > 0")
     for key in ("max_psd", "trigger", "grid"):
         if key in buttons and not isinstance(buttons[key], bool):
             raise ValueError(f"buttons.{key} must be true or false")
@@ -628,7 +635,14 @@ def plot_event(
             pass
 
         fig.clear()
-        fig.set_size_inches(plot_cfg.figure_width, plot_cfg.figure_height, forward=True)
+        # Resizing a live GUI figure with forward=True can make Qt/Tk restore a
+        # maximized window to its normal geometry.  Normal-mode sizing is applied
+        # centrally by apply_window_mode() after each redraw; maximized mode must
+        # leave the native window geometry alone.
+        if plot_cfg.window_mode == "normal":
+            fig.set_size_inches(
+                plot_cfg.figure_width, plot_cfg.figure_height, forward=True
+            )
 
     ax_max_power, ax = fig.subplots(
         2, 1,
@@ -1128,17 +1142,33 @@ def build_arg_parser() -> argparse.ArgumentParser:
 
 
 
-def open_maximized(fig) -> None:
-    """Maximize an interactive Matplotlib window while retaining decorations.
+def apply_window_mode(fig, plot_cfg: PlotConfig) -> None:
+    """Apply the configured native GUI window state.
 
-    Matplotlib window-manager APIs differ by GUI backend, so use the native
-    maximize operation exposed by common Qt/Tk backends.  Do not use the
-    fullscreen toggle: the normal title bar and window borders should remain
-    visible.  Headless/save-only operation never calls this.
+    This is intentionally called after every event redraw.  Some Matplotlib GUI
+    backends restore a maximized window to normal geometry when a live Figure is
+    resized/relaid out, so applying the requested state only on the first event is
+    not sufficient.  In normal mode, figure_width/figure_height define the normal
+    Figure size.
     """
     try:
         manager = fig.canvas.manager
         window = getattr(manager, "window", None)
+
+        if plot_cfg.window_mode == "normal":
+            if window is not None:
+                show_normal = getattr(window, "showNormal", None)
+                if callable(show_normal):
+                    show_normal()
+                else:
+                    state = getattr(window, "state", None)
+                    if callable(state):
+                        state("normal")
+            fig.set_size_inches(
+                plot_cfg.figure_width, plot_cfg.figure_height, forward=True
+            )
+            return
+
         if window is None:
             return
 
@@ -1152,8 +1182,9 @@ def open_maximized(fig) -> None:
             state("zoomed")
     except Exception:
         # Window sizing is cosmetic; plotting/navigation must still work on
-        # backends that expose no supported maximize operation.
+        # backends that expose no supported native window-state operation.
         pass
+
 
 def main(argv: Iterable[str] | None = None) -> int:
     args = build_arg_parser().parse_args(argv)
@@ -1239,8 +1270,11 @@ def main(argv: Iterable[str] | None = None) -> int:
                         # events redraw the same Figure instead of destroying and
                         # recreating the window.
                         plt.show(block=False)
-                        open_maximized(fig)
                         window_initialized = True
+                    # Enforce the configured window state after every redraw.
+                    # This prevents later events from dropping a maximized window
+                    # back to normal size on backends such as Qt/Tk.
+                    apply_window_mode(fig, plot_cfg)
                     fig.canvas.draw_idle()
 
                     # Keep the backend GUI responsive until a navigation callback

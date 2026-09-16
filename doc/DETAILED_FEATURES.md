@@ -137,6 +137,9 @@ Here is a concise list of the main **Meteoris** features as developed so far:
   * One event displayed at a time.
   * Reuses one Matplotlib GUI window while browsing; event changes redraw the
     existing figure instead of destroying and recreating the desktop window.
+  * Configurable GUI window mode (`maximized` or `normal`) in
+    `meteoris_plot.toml`, reapplied after every event redraw; normal mode uses
+    the configured figure width and height.
   * `Space` advances to the next event.
   * `number + Space` jumps directly to an event.
   * `R` refreshes an active SWMR recording.

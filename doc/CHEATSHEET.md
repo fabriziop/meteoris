@@ -239,6 +239,18 @@ trigger = true
 grid = false
 ```
 
+Window state/normal size:
+
+```toml
+[plot]
+window_mode = "maximized"   # or "normal"
+figure_width = 11.5         # normal mode only
+figure_height = 7.2         # normal mode only
+```
+
+The selected window mode is reapplied on every event redraw, so navigation does
+not change a maximized window back to normal size.
+
 PSD color limits can be adjusted interactively with the sliders.
 
 ## 8. Live viewing

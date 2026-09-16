@@ -584,11 +584,36 @@ def plot_event(
         fig = plt.figure(figsize=(plot_cfg.figure_width, plot_cfg.figure_height))
     else:
         fig = reuse_fig
+        # Disconnect every event-specific callback from the previous event before
+        # clearing/rebuilding the Figure.  Matplotlib widgets (Button/Slider)
+        # register their own mouse callbacks directly on the canvas; fig.clear()
+        # removes their Axes but does not disconnect those callbacks.  Leaving
+        # them connected makes stale widgets accumulate and contend for the
+        # canvas widget lock, which can make controls on later events appear
+        # stuck.
+        for widget in getattr(fig, "_meteoris_widgets", ()):
+            try:
+                widget.disconnect_events()
+            except Exception:
+                pass
+        fig._meteoris_widgets = ()
+
         for cid in getattr(fig, "_meteoris_event_cids", ()):
             try:
                 fig.canvas.mpl_disconnect(cid)
             except Exception:
                 pass
+        fig._meteoris_event_cids = ()
+
+        # A stale widget should never own the lock after its event is gone, but
+        # release it defensively before constructing the next event's controls.
+        try:
+            owner = getattr(fig.canvas.widgetlock, "_owner", None)
+            if owner is not None:
+                fig.canvas.widgetlock.release(owner)
+        except Exception:
+            pass
+
         fig.clear()
         fig.set_size_inches(plot_cfg.figure_width, plot_cfg.figure_height, forward=True)
 

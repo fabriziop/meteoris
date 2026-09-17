@@ -35,17 +35,17 @@ To omit the SoapySDR simulator plugin during installation:
 
 ### Raspberry Pi OS
 
-For a native Raspberry Pi build:
+Use the same build entry point as every other Linux host:
 
 ```bash
-./build_rpi3.sh
+./build.sh
 ```
 
-The menu has two modes, and **both include** `meteoris_config` and
+Choose `1` for full or `2` for recorder-only, or use `--full` /
+`--recorder-only`. Both modes include `meteoris_config` and
 `meteoris_recover_hdf5`:
 
-- full: `meteoris` + `meteoris_plot` + `meteoris_config` +xi
-  `meteoris_recover_hdf5`
+- full: `meteoris` + `meteoris_plot` + `meteoris_config` + `meteoris_recover_hdf5`
 - recorder-only: `meteoris` + `meteoris_config` + `meteoris_recover_hdf5`
 
 The recovery helper requires the distro HDF5 command-line tools (`h5dump`,

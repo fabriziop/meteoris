@@ -1,0 +1,11 @@
+# Local build selection recorded by build.sh for install.sh.
+.meteoris-last-build
+
+# Build trees.
+build-*/
+build/
+
+# Python/test caches.
+__pycache__/
+.pytest_cache/
+*.pyc

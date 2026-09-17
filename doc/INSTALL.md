@@ -49,18 +49,15 @@ runtime dependency in both Raspberry Pi build modes, including recorder-only.
 ./build.sh
 ```
 
-This is equivalent to:
+The script asks for `1) Full` or `2) Recorder only`. The corresponding native
+build directories are `build-full/` and `build-recorder-only/`. For scripted
+use, select the mode directly with `--full` or `--recorder-only`.
+
+A clean full rebuild is:
 
 ```bash
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build --parallel "$(nproc)"
-```
-
-A clean rebuild is:
-
-```bash
-rm -rf build
-./build.sh
+rm -rf build-full
+./build.sh --full
 ```
 
 ### Portable build
@@ -72,35 +69,37 @@ binaries intended to run on a different CPU:
 ./build.sh -DMETEORIS_NATIVE_OPTIMIZATION=OFF
 ```
 
-Disable the simulator if only the recorder is needed:
+For a recorder-only build, use the dedicated mode rather than overriding
+individual CMake switches:
 
 ```bash
-./build.sh -DMETEORIS_BUILD_SIM=OFF
+./build.sh --recorder-only
 ```
 
 ## Raspberry Pi with Raspberry Pi OS Trixie
 
-Two supported workflows are available:
+The same `build.sh` is used on x86 Linux and Raspberry Pi. It asks for one of
+two build modes:
 
-- Native build directly on the Raspberry Pi.
-- Cross-build on a faster x86_64 Linux host.
+- **Full**: `meteoris` + `meteoris_plot` + `meteoris_config` + `meteoris_recover_hdf5`
+- **Recorder only**: `meteoris` + `meteoris_config` + `meteoris_recover_hdf5`
 
 ### Native build on the Pi
 
-Install dependencies according to the build mode.
+Install dependencies according to the selected build mode.
 
-Full build (recorder + plotting tool):
+Full build:
 
 ```bash
 sudo apt update
 sudo apt install \
-        build-essential cmake pkg-config \
-        libsoapysdr-dev soapysdr-tools \
-        libhdf5-dev hdf5-tools libspdlog-dev libfftw3-dev \
-        python3-numpy python3-matplotlib python3-h5py
+    build-essential cmake pkg-config \
+    libsoapysdr-dev soapysdr-tools \
+    libhdf5-dev hdf5-tools libspdlog-dev libfftw3-dev \
+    python3-numpy python3-matplotlib python3-h5py
 ```
 
-Recorder-only build (no plotting tool):
+Recorder-only build:
 
 ```bash
 sudo apt update
@@ -110,93 +109,68 @@ sudo apt install \
     libhdf5-dev hdf5-tools libspdlog-dev libfftw3-dev
 ```
 
-Then configure and build:
+Then run:
 
 ```bash
-./build_rpi3.sh
+./build.sh
 ```
 
-`build_rpi3.sh` first checks local hardware/OS; on a Raspberry Pi it selects
-the native preset even if `RPI_SYSROOT` is set in the environment.
+Choose `1` for full or `2` for recorder-only. For non-interactive builds use:
 
-### Cross-build for Pi 3B (aarch64)
+```bash
+./build.sh --full
+./build.sh --recorder-only
+```
 
-On the host machine, install aarch64 cross tools:
+On Raspberry Pi 3 hardware the script preserves the Cortex-A53 tuning used by
+the previous Pi-specific build helper. No Raspberry-Pi-specific build filename
+or preset is required.
+
+### Cross-build for aarch64 Raspberry Pi
+
+On the host machine install the aarch64 cross tools:
 
 ```bash
 sudo apt update
 sudo apt install \
-        cmake make pkg-config \
-        gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+    cmake make pkg-config \
+    gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
 ```
 
-For cross builds, Python plotting dependencies are only required in the target
-sysroot when using the full build mode.
-
-Create or sync a Raspberry Pi sysroot that includes target runtime and
-development libraries (SoapySDR, HDF5, spdlog, FFTW and their dependencies).
-
-Set the sysroot path and run the Pi preset:
+Create or sync a target sysroot containing the target development libraries
+(SoapySDR, HDF5, spdlog, FFTW and dependencies), then:
 
 ```bash
-export RPI_SYSROOT=/opt/sysroots/rpi-trixie-aarch64
-./build_rpi3.sh
+export RPI_SYSROOT=/opt/sysroots/rpi-aarch64
+./build.sh --cross
 ```
 
-When `RPI_SYSROOT` is set, `build_rpi3.sh` automatically uses a cross-build
-preset.
-
-You can force behavior explicitly:
+`build.sh` still asks for full vs recorder-only unless `--full` or
+`--recorder-only` is supplied. When `RPI_SYSROOT` is set on a non-Pi host,
+cross mode is selected automatically, so this is also valid:
 
 ```bash
-./build_rpi3.sh --native
-export RPI_SYSROOT=/opt/sysroots/rpi-trixie-aarch64
-./build_rpi3.sh --cross
+export RPI_SYSROOT=/opt/sysroots/rpi-aarch64
+./build.sh --recorder-only
 ```
 
-If neither condition is met (not running on a Raspberry Pi and no
-`RPI_SYSROOT`), the script stops with a clear error message.
+Cross builds use the generic toolchain file
+`cmake/toolchains/aarch64-linux.cmake`, disable host-native optimization, tune
+for Cortex-A53, and disable the simulator plugin.
 
-`build_rpi3.sh` asks which build you want:
+Build directories are generic:
 
-- full build: `meteoris` + `meteoris_plot` + `meteoris_config` + `meteoris_recover_hdf5`
-- recorder-only build: `meteoris` + `meteoris_config` + `meteoris_recover_hdf5`
-
-You can also select the preset directly:
-
-```bash
-export RPI_SYSROOT=/opt/sysroots/rpi-trixie-aarch64
-cmake --preset rpi3-aarch64-cross-release-full
-cmake --build --preset rpi3-aarch64-cross-release-full
-
-cmake --preset rpi3-aarch64-cross-release-recorder-only
-cmake --build --preset rpi3-aarch64-cross-release-recorder-only
-
-cmake --preset rpi3-native-release-full
-cmake --build --preset rpi3-native-release-full
-
-cmake --preset rpi3-native-release-recorder-only
-cmake --build --preset rpi3-native-release-recorder-only
+```text
+build-full/
+build-recorder-only/
+build-cross-full/
+build-cross-recorder-only/
 ```
 
-The cross preset intentionally uses:
-
-- `METEORIS_NATIVE_OPTIMIZATION=OFF` to avoid `-march=native` on the host.
-- `METEORIS_CPU_TUNE=cortex-a53` for Raspberry Pi 3B class CPUs.
-- `METEORIS_BUILD_SIM=OFF` to avoid installing/testing a host-incompatible
-    SoapySDR plugin in cross-build output.
-- `METEORIS_INSTALL_PLOT=OFF` in recorder-only mode.
-- `METEORIS_INSTALL_RECOVER_HDF5=ON` in **both** modes, so the recovery helper
-  is available on headless recorder systems as well as full installations.
-- `METEORIS_INSTALL_CONFIG_TOOL=ON` in **both** modes, so the interactive TOML
-  wizard is also available on headless recorder systems.
-
-Each configured build directory also contains `meteoris_config` and
-`meteoris_recover_hdf5`. For a manual cross-build deployment, copy the recorder
-and both helpers to the Pi (and copy `meteoris_plot` as needed for a full
-installation). Prefer
-`cmake --install` when possible so executable permissions and runtime files are
-installed consistently.
+After a successful build, `build.sh` records the selected build directory in
+`.meteoris-last-build`. This local marker is ignored by Git and lets
+`install.sh` reuse the exact build instead of configuring and compiling a
+second tree.
 
 ## Install
 
@@ -250,8 +224,9 @@ A custom prefix is also supported:
 ./install.sh --local --prefix "$HOME/apps/meteoris"
 ```
 
-The install script builds the complete project and installs the simulator
-plugin by default. To install only Meteoris and the viewer:
+Normally `install.sh` reuses the last successful `build.sh` directory and does not rebuild it.
+Use `--rebuild` when you explicitly want another compile before installation.
+To omit the simulator plugin from installation:
 
 ```bash
 ./install.sh --local --no-sim

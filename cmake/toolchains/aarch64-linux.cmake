@@ -1,7 +1,5 @@
-# Raspberry Pi 3B (Raspberry Pi OS Trixie, aarch64) cross-compilation toolchain.
-# Usage example:
-#   export RPI_SYSROOT=/opt/sysroots/rpi-trixie-aarch64
-#   cmake --preset rpi3-aarch64-cross-release
+# Generic aarch64 Linux cross-compilation toolchain used for Raspberry Pi deployments.
+# Normally selected by ./build.sh --cross after RPI_SYSROOT is exported.
 
 set(CMAKE_SYSTEM_NAME Linux)
 set(CMAKE_SYSTEM_PROCESSOR aarch64)

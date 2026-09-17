@@ -4,14 +4,12 @@
 meteoris/
 ├── VERSION
 ├── CMakeLists.txt
-├── CMakePresets.json
 ├── build.sh
-├── build_rpi3.sh
 ├── install.sh
 ├── run_sim.sh
 ├── cmake/
 │   └── toolchains/
-│       └── rpi3-trixie-aarch64.cmake
+│       └── aarch64-linux.cmake
 ├── src/
 │   ├── meteoris.cpp
 │   ├── version.hpp.in
@@ -69,9 +67,8 @@ compile time; the repository currently includes `peak_tracker` and
 embedded radix-2 implementation and optional FFTW support.
 
 The SoapySDR test device is built from `sim/`, `tests/` contains detector tests,
-and `tools/` contains the Python event viewer and HDF5 crash-recovery helper. Raspberry Pi native/cross-build
-support is provided by `build_rpi3.sh`, `CMakePresets.json`, and the toolchain in
-`cmake/toolchains/`. `run_sim.sh` runs against the freshly built in-tree
+and `tools/` contains the Python event viewer and HDF5 crash-recovery helper. Native and aarch64 cross-build support is provided by the single `build.sh`
+entry point and the generic toolchain in `cmake/toolchains/`. `run_sim.sh` runs against the freshly built in-tree
 simulator plugin, and `install.sh` supports local or system installation.
 
 Generated build directories, `.git/`, Python `__pycache__/` directories, and

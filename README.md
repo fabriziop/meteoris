@@ -70,16 +70,19 @@ short path from build and configuration to recording and viewing events.**
 
 # [Download, Build and Install](doc/INSTALL.md)
 
-The Raspberry Pi build helper offers two modes. Both include the HDF5 recovery
-command:
+The single `build.sh` entry point offers two modes on Linux and Raspberry Pi.
+Both include the HDF5 recovery command:
 
 - **Full:** `meteoris` + `meteoris_plot` + `meteoris_config` + `meteoris_recover_hdf5`
 - **Recorder-only:** `meteoris` + `meteoris_config` + `meteoris_recover_hdf5`
 
 The recorder-only mode omits the plotting tool and simulator, but deliberately
 keeps both `meteoris_config` and `meteoris_recover_hdf5` so a headless recorder
-can create/review configuration files and recover files after an unclean shutdown. See [INSTALL.md](doc/INSTALL.md) for native and cross-build
-details.
+can create/review configuration files and recover files after an unclean shutdown.
+Run `./build.sh` and choose `1` or `2`, or use `--full` / `--recorder-only` for
+non-interactive builds. `install.sh` reuses the last successful build rather
+than building a second tree. See [INSTALL.md](doc/INSTALL.md) for native and
+cross-build details.
 
 
 # Set Meteoris Configuration

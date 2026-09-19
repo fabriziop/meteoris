@@ -74,3 +74,11 @@ simulator plugin, and `install.sh` supports local or system installation.
 Generated build directories, `.git/`, Python `__pycache__/` directories, and
 other transient build/runtime files are intentionally omitted from the layout
 above.
+
+## Platform build entry points
+
+The repository remains the single reference source for every supported target.
+Linux x86/x86_64 and Linux ARM64 use `build.sh` / `install.sh`; Windows x86/x64
+uses `build.ps1` / `install.ps1`. Windows helper commands use the `.cmd`
+launchers in `tools/`. Windows ARM/ARM64 is intentionally not part of the build
+matrix.

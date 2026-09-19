@@ -14,17 +14,19 @@ A configuration wizard (`meteoris_config`) for an easy generation of a
 Meteoris configuration file from questions and answers.
 A conservative recovery helper (`meteoris_recover_hdf5`) for HDF5 files left
 unreadable after a crash, forced termination, or power loss.
-A SoapySDR simulator driver is also
-available. It synthesizes typical meteor-scatter radio signals that can be
+A SoapySDR simulator driver is also available.
+It synthesizes typical meteor-scatter radio signals that can be
 recorded by Meteoris and is useful for adjusting critical receiver and detector
 parameters.
 
-Meteoris has currently been tested on Ubuntu/Linux on X86 and on
-Pi OS trixie on Raspberry Pi 3B both with the [HackRF One
-SDR](https://hackrf.readthedocs.io/en/latest/hackrf_one.html).
-Meteoris should currently be considered alpha software. The authoritative package
-version is stored in the root `VERSION` file and is reported by all installed commands
-with `--version`.
+Meteoris supports Linux x86/x86_64, Linux ARM64, and Windows x86/x64 platforms.
+Linux has been tested on Ubuntu/Linux on x86/x86_64, on Raspberry Pi OS Trixie
+on Raspberry Pi 3B. Windows 11 has been tested on x86/x86_64. All with the
+[HackRF One SDR](https://hackrf.readthedocs.io/en/latest/hackrf_one.html).
+
+Meteoris should currently be considered alpha software. The authoritative
+package version is stored in the root `VERSION` file and is reported by all
+installed commands with `--version`.
 
 ### Author's Note
 
@@ -34,28 +36,17 @@ authour provided the ideas, requirements, and some of the solutions.
 Without AI, this project probably would not exist.
 
 
-## Versioning
-
-`VERSION` at the repository root is the single authoritative package version.
-CMake reads it to set `PROJECT_VERSION`, generates the C++ `version.hpp`, copies it
-into the build tree for the Python tools, and installs it as
-`share/meteoris/VERSION`. Do not hard-code the current release number in sources or
-documentation. To make a release version change, edit `VERSION` only.
-
-All user-facing commands expose the same package version with `--version`:
-`meteoris`, `meteoris_plot`, `meteoris_config`, and `meteoris_recover_hdf5`.
-See [`doc/VERSIONING.md`](doc/VERSIONING.md) for the release/version workflow.
-
 # Main Features
 
   * Supports SDR receivers available through SoapySDR.
-  * Supports X86 and ARM platforms
+  * One source tree for Linux x86/x86_64, Linux ARM64, and Windows x86/x64.
   * Fully configurable through a file or command-line options.
   * Continuous **10 Msps** input.
   * Final selectable **100 kHz observation band**.
   * Pluggable meteor signal detectors, including peak/track and
     Echoes-style automatic threshold detection.
   * Efficient HDF5 storage format for meteor-event data.
+  * Interactive configuration wizzard `meteoris_config`
   * Conservative `meteoris_recover_hdf5` helper for files left uncleanly closed.
   * Event-list display with details for each event.
   * Interactive event display with a time/frequency waterfall, an optional
@@ -70,19 +61,22 @@ short path from build and configuration to recording and viewing events.**
 
 # [Download, Build and Install](doc/INSTALL.md)
 
-The single `build.sh` entry point offers two modes on Linux and Raspberry Pi.
-Both include the HDF5 recovery command:
+Linux uses the single `build.sh` entry point on x86 and ARM64/Raspberry Pi.
+Windows x86/x64 uses the matching `build.ps1` entry point. Both offer the same
+two modes and include the HDF5 recovery command:
 
-- **Full:** `meteoris` + `meteoris_plot` + `meteoris_config` + `meteoris_recover_hdf5`
+- **Full:** `meteoris` + `meteoris_plot` + `meteoris_config` +
+  `meteoris_recover_hdf5`
 - **Recorder-only:** `meteoris` + `meteoris_config` + `meteoris_recover_hdf5`
 
 The recorder-only mode omits the plotting tool and simulator, but deliberately
 keeps both `meteoris_config` and `meteoris_recover_hdf5` so a headless recorder
 can create/review configuration files and recover files after an unclean shutdown.
-Run `./build.sh` and choose `1` or `2`, or use `--full` / `--recorder-only` for
-non-interactive builds. `install.sh` reuses the last successful build rather
-than building a second tree. See [INSTALL.md](doc/INSTALL.md) for native and
-cross-build details.
+On Linux, run `./build.sh` and choose `1` or `2`, or use `--full` /
+`--recorder-only`; `install.sh` reuses the last successful build. On Windows,
+use `build.ps1 -Mode full` or `build.ps1 -Mode recorder-only`, followed by
+`install.ps1`. See [INSTALL.md](doc/INSTALL.md) for dependencies and target
+details.
 
 
 # Set Meteoris Configuration
@@ -343,7 +337,8 @@ meteoris_recover_hdf5 data/meteoris_YYYYMMDD.h5
 The default/recommended choice recovers to a separate file and leaves the
 original untouched. In-place recovery is also available after a warning and
 explicit confirmation. The helper clears only a detected stale HDF5 writer
-flag and uses `h5clear --increment` only when an EOA/EOF mismatch is confirmed. See [Recover HDF5 Output Files](./doc/RECOVER_HDF5.md) for the
+flag and uses `h5clear --increment` only when an EOA/EOF mismatch is confirmed.
+See [Recover HDF5 Output Files](./doc/RECOVER_HDF5.md) for the
 manual procedure, validation steps, and stop conditions.
 
 

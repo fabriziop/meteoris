@@ -9,3 +9,7 @@ build/
 __pycache__/
 .pytest_cache/
 *.pyc
+
+# Windows build/install selection.
+.meteoris-last-build-windows
+build-win-*/

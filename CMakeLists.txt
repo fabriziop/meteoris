@@ -15,6 +15,24 @@ project(Meteoris
     LANGUAGES C CXX
 )
 
+# Supported target matrix from one source tree:
+#   - Linux x86/x86_64
+#   - Linux ARM64
+#   - Windows x86/x86_64
+# Windows ARM/ARM64 is intentionally excluded.
+if(WIN32)
+    string(TOUPPER "${CMAKE_SYSTEM_PROCESSOR}" METEORIS_SYSTEM_PROCESSOR_UPPER)
+    string(TOUPPER "${CMAKE_GENERATOR_PLATFORM}" METEORIS_GENERATOR_PLATFORM_UPPER)
+    string(TOUPPER "${MSVC_CXX_ARCHITECTURE_ID}" METEORIS_MSVC_ARCH_UPPER)
+    if(METEORIS_SYSTEM_PROCESSOR_UPPER MATCHES "ARM" OR
+       METEORIS_GENERATOR_PLATFORM_UPPER MATCHES "ARM" OR
+       METEORIS_MSVC_ARCH_UPPER MATCHES "ARM")
+        message(FATAL_ERROR
+            "Windows ARM/ARM64 is not a supported Meteoris target. "
+            "Use Windows x86/x64, or Linux ARM64.")
+    endif()
+endif()
+
 configure_file(
     "${CMAKE_SOURCE_DIR}/src/version.hpp.in"
     "${CMAKE_BINARY_DIR}/generated/version.hpp"
@@ -32,6 +50,7 @@ option(METEORIS_BUILD_SIM "Build the SoapySDR meteoris_sim plugin" ON)
 option(METEORIS_NATIVE_OPTIMIZATION "Optimize generated code for the build host CPU" ON)
 option(METEORIS_FAST_MATH "Enable fast floating-point math for DSP kernels" ON)
 option(METEORIS_USE_FFTW "Use FFTW3 for FFT instead of internal Radix-2 FFT" ON)
+option(METEORIS_X86_AVX2 "Compile x86/x64 code with an explicit AVX2 baseline" OFF)
 option(METEORIS_INSTALL_PLOT "Install the meteoris_plot viewer tool" ON)
 option(METEORIS_INSTALL_RECOVER_HDF5 "Install the meteoris_recover_hdf5 recovery tool" ON)
 option(METEORIS_INSTALL_CONFIG_TOOL "Install the interactive meteoris_config tool" ON)
@@ -85,7 +104,29 @@ if(HDF5_VERSION VERSION_LESS "1.10")
     message(FATAL_ERROR "Meteoris SWMR support requires HDF5 >= 1.10")
 endif()
 find_package(Threads REQUIRED)
-find_package(spdlog CONFIG REQUIRED)
+
+# spdlog can be consumed either through its CMake package or directly from an
+# installed header tree.  The header-only path is particularly useful on
+# Windows because an spdlog installation produced from a build tree can leave
+# a non-relocatable spdlogConfig.cmake that still references the original
+# source directory.
+set(METEORIS_SPDLOG_INCLUDE_DIR "" CACHE PATH
+    "Use spdlog headers from this directory instead of loading spdlogConfig.cmake")
+
+if(METEORIS_SPDLOG_INCLUDE_DIR)
+    if(NOT EXISTS "${METEORIS_SPDLOG_INCLUDE_DIR}/spdlog/spdlog.h")
+        message(FATAL_ERROR
+            "METEORIS_SPDLOG_INCLUDE_DIR does not contain spdlog/spdlog.h: ${METEORIS_SPDLOG_INCLUDE_DIR}")
+    endif()
+    add_library(meteoris_spdlog_header_only INTERFACE)
+    target_include_directories(meteoris_spdlog_header_only INTERFACE
+        "${METEORIS_SPDLOG_INCLUDE_DIR}")
+    set(METEORIS_SPDLOG_TARGET meteoris_spdlog_header_only)
+    message(STATUS "Using spdlog header-only from: ${METEORIS_SPDLOG_INCLUDE_DIR}")
+else()
+    find_package(spdlog CONFIG REQUIRED)
+    set(METEORIS_SPDLOG_TARGET spdlog::spdlog)
+endif()
 
 # Optional FFTW3 support for FFT backend
 if(METEORIS_USE_FFTW)
@@ -148,7 +189,7 @@ target_link_libraries(meteoris PRIVATE
     ${METEORIS_SOAPY_TARGET}
     ${METEORIS_HDF5_TARGET}
     Threads::Threads
-    spdlog::spdlog
+    ${METEORIS_SPDLOG_TARGET}
 )
 
 if(METEORIS_USE_FFTW)
@@ -170,6 +211,10 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
         )
     endif()
 
+    if(METEORIS_X86_AVX2 AND CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|amd64|AMD64|i.86)$")
+        target_compile_options(meteoris PRIVATE -mavx2)
+    endif()
+
     if(METEORIS_CPU_TUNE)
         if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(aarch64|arm|armv7l|armv8l)$")
             target_compile_options(meteoris PRIVATE -mcpu=${METEORIS_CPU_TUNE})
@@ -180,6 +225,19 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
         endif()
     elseif(METEORIS_NATIVE_OPTIMIZATION)
         target_compile_options(meteoris PRIVATE -march=native)
+    endif()
+elseif(MSVC)
+    # spdlog's bundled fmt requires UTF-8 source/execution character sets on MSVC.
+    target_compile_options(meteoris PRIVATE /W4 /utf-8)
+    if(METEORIS_FAST_MATH)
+        target_compile_options(meteoris PRIVATE /fp:fast)
+    endif()
+    if(METEORIS_X86_AVX2)
+        target_compile_options(meteoris PRIVATE /arch:AVX2)
+    elseif(METEORIS_NATIVE_OPTIMIZATION)
+        message(STATUS
+            "MSVC has no -march=native equivalent; using its default x86/x64 code generation. "
+            "Set METEORIS_X86_AVX2=ON to require AVX2.")
     endif()
 endif()
 
@@ -195,77 +253,73 @@ endif()
 
 include(GNUInstallDirs)
 
-# The recovery helper is part of every normal build mode unless explicitly
-# disabled.  Copy it into the build directory so recorder-only deployments get
-# the command too; installation still places it in <prefix>/bin.
+# Python helper commands are exposed in the build tree as well as installed.
+# POSIX uses executable extensionless scripts; Windows keeps .py files and
+# installs small .cmd launchers that invoke the Python launcher.
+function(meteoris_prepare_python_tool tool_name source_name)
+    if(WIN32)
+        set(py_path "${CMAKE_BINARY_DIR}/${tool_name}.py")
+        set(cmd_path "${CMAKE_BINARY_DIR}/${tool_name}.cmd")
+        add_custom_command(
+            OUTPUT "${py_path}" "${cmd_path}"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                    "${CMAKE_SOURCE_DIR}/tools/${source_name}" "${py_path}"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                    "${CMAKE_SOURCE_DIR}/tools/${tool_name}.cmd" "${cmd_path}"
+            DEPENDS
+                "${CMAKE_SOURCE_DIR}/tools/${source_name}"
+                "${CMAKE_SOURCE_DIR}/tools/${tool_name}.cmd"
+            COMMENT "Preparing ${tool_name} for Windows"
+            VERBATIM
+        )
+        add_custom_target(${tool_name}_tool ALL DEPENDS "${py_path}" "${cmd_path}")
+        install(FILES
+            "tools/${source_name}"
+            DESTINATION ${CMAKE_INSTALL_BINDIR}
+            RENAME "${tool_name}.py"
+            COMPONENT meteoris_runtime
+        )
+        install(PROGRAMS
+            "tools/${tool_name}.cmd"
+            DESTINATION ${CMAKE_INSTALL_BINDIR}
+            COMPONENT meteoris_runtime
+        )
+    else()
+        set(build_path "${CMAKE_BINARY_DIR}/${tool_name}")
+        add_custom_command(
+            OUTPUT "${build_path}"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                    "${CMAKE_SOURCE_DIR}/tools/${source_name}" "${build_path}"
+            DEPENDS "${CMAKE_SOURCE_DIR}/tools/${source_name}"
+            COMMENT "Preparing ${tool_name}"
+            VERBATIM
+        )
+        add_custom_target(${tool_name}_tool ALL DEPENDS "${build_path}")
+        install(PROGRAMS
+            "tools/${source_name}"
+            DESTINATION ${CMAKE_INSTALL_BINDIR}
+            RENAME ${tool_name}
+            COMPONENT meteoris_runtime
+        )
+    endif()
+endfunction()
+
 if(METEORIS_INSTALL_RECOVER_HDF5)
-    set(METEORIS_RECOVER_HDF5_BUILD_PATH
-        "${CMAKE_BINARY_DIR}/meteoris_recover_hdf5")
-    add_custom_command(
-        OUTPUT "${METEORIS_RECOVER_HDF5_BUILD_PATH}"
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                "${CMAKE_SOURCE_DIR}/tools/meteoris_recover_hdf5.py"
-                "${METEORIS_RECOVER_HDF5_BUILD_PATH}"
-        DEPENDS "${CMAKE_SOURCE_DIR}/tools/meteoris_recover_hdf5.py"
-        COMMENT "Preparing meteoris_recover_hdf5"
-        VERBATIM
-    )
-    add_custom_target(meteoris_recover_hdf5_tool ALL
-        DEPENDS "${METEORIS_RECOVER_HDF5_BUILD_PATH}")
+    meteoris_prepare_python_tool(meteoris_recover_hdf5 meteoris_recover_hdf5.py)
 endif()
 
-# The configuration wizard is useful on both full and recorder-only systems.
-# Like the recovery helper, expose it directly in the build directory too.
 if(METEORIS_INSTALL_CONFIG_TOOL)
-    set(METEORIS_CONFIG_TOOL_BUILD_PATH
-        "${CMAKE_BINARY_DIR}/meteoris_config")
-    add_custom_command(
-        OUTPUT "${METEORIS_CONFIG_TOOL_BUILD_PATH}"
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                "${CMAKE_SOURCE_DIR}/tools/meteoris_config.py"
-                "${METEORIS_CONFIG_TOOL_BUILD_PATH}"
-        DEPENDS "${CMAKE_SOURCE_DIR}/tools/meteoris_config.py"
-        COMMENT "Preparing meteoris_config"
-        VERBATIM
-    )
-    add_custom_target(meteoris_config_tool ALL
-        DEPENDS "${METEORIS_CONFIG_TOOL_BUILD_PATH}")
+    meteoris_prepare_python_tool(meteoris_config meteoris_config.py)
+endif()
+
+if(METEORIS_INSTALL_PLOT)
+    meteoris_prepare_python_tool(meteoris_plot meteoris_plot.py)
 endif()
 
 install(TARGETS meteoris
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
     COMPONENT meteoris_runtime
 )
-
-# Install the Python viewer as a normal command without the .py suffix.
-if(METEORIS_INSTALL_PLOT)
-    install(PROGRAMS
-        tools/meteoris_plot.py
-        DESTINATION ${CMAKE_INSTALL_BINDIR}
-        RENAME meteoris_plot
-        COMPONENT meteoris_runtime
-    )
-endif()
-
-# Install the interactive configuration wizard as a normal command.
-if(METEORIS_INSTALL_CONFIG_TOOL)
-    install(PROGRAMS
-        tools/meteoris_config.py
-        DESTINATION ${CMAKE_INSTALL_BINDIR}
-        RENAME meteoris_config
-        COMPONENT meteoris_runtime
-    )
-endif()
-
-# Install the conservative HDF5 crash-recovery helper as a normal command.
-if(METEORIS_INSTALL_RECOVER_HDF5)
-    install(PROGRAMS
-        tools/meteoris_recover_hdf5.py
-        DESTINATION ${CMAKE_INSTALL_BINDIR}
-        RENAME meteoris_recover_hdf5
-        COMPONENT meteoris_runtime
-    )
-endif()
 
 # These are examples/templates. User-edited runtime configuration should
 # normally live beside the application or in a site-specific config dir.

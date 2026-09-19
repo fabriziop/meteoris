@@ -1,6 +1,8 @@
 # Download, Build and Install
 
-Meteoris can be built and installed on X86 and ARM platforms.
+Meteoris is built from one repository for three supported target families:
+Linux x86/x86_64, Linux ARM64, and Windows x86/x64. Windows ARM/ARM64 is
+intentionally excluded.
 
 
 ## Package version
@@ -75,6 +77,100 @@ individual CMake switches:
 ```bash
 ./build.sh --recorder-only
 ```
+
+## Windows x86/x64
+
+Windows uses the same `CMakeLists.txt`, C++ sources, configuration files, and
+Python tools as Linux. Do not create or maintain a separate Windows source
+branch or copy. Windows ARM/ARM64 is intentionally rejected by CMake; ARM64 is
+a Linux-only target for this project.
+
+### Build dependencies
+
+Install:
+
+- Visual Studio 2022 or Build Tools with **Desktop development with C++**.
+- CMake and Git.
+- Python 3.11 or newer for the helper tools.
+- SoapySDR, HDF5, spdlog, and optionally FFTW3 for the same target architecture.
+
+[vcpkg](https://github.com/microsoft/vcpkg) is a convenient way to provide the
+C/C++ dependencies. For an x64 build, a typical dependency setup is:
+
+```powershell
+$env:VCPKG_ROOT = 'C:\src\vcpkg'
+& $env:VCPKG_ROOT\vcpkg.exe install soapysdr hdf5 spdlog fftw3 --triplet x64-windows
+```
+
+Meteoris itself only requires the SoapySDR core API at build time. To use real
+SDR hardware, install a matching Windows SoapySDR hardware module/driver as
+well. Availability is device-specific.
+
+For the Python plotting and HDF5 tools:
+
+```powershell
+py -3 -m pip install numpy matplotlib h5py
+```
+
+`meteoris_recover_hdf5` also requires the HDF5 command-line programs `h5dump`,
+`h5clear`, and `h5ls` to be available on `PATH`.
+
+### Build
+
+From a Developer PowerShell prompt:
+
+```powershell
+.\build.ps1 -Mode full -Architecture x64 -Generator "Visual Studio 17 2022"
+```
+
+Recorder-only:
+
+```powershell
+.\build.ps1 -Mode recorder-only -Architecture x64 -Generator "Visual Studio 17 2022"
+```
+
+If `VCPKG_ROOT` is set, `build.ps1` automatically uses its CMake toolchain.
+Without vcpkg, the script also augments `CMAKE_PREFIX_PATH` with dependency
+installations it finds in common Windows locations, including `Program Files`
+(for spdlog, SoapySDR/PothosSDR and HDF5), `C:\deps`, and sibling
+`spdlog`/`SoapySDR` build or install trees. Existing `CMAKE_PREFIX_PATH` entries
+are preserved. An explicit `-DCMAKE_PREFIX_PATH=...` passed with `-CMakeOption`
+remains authoritative.
+
+Additional CMake definitions can be supplied with `-CMakeOption`, for example:
+
+```powershell
+.\build.ps1 -Mode full -CMakeOption '-DMETEORIS_USE_FFTW=OFF'
+```
+
+The default x64 build does not require AVX2. To deliberately build an AVX2-only
+binary, add `-DMETEORIS_X86_AVX2=ON`.
+
+### Install
+
+A per-user install defaults to `%LOCALAPPDATA%\Meteoris`:
+
+```powershell
+.\install.ps1 -Local
+```
+
+A system install defaults to `%ProgramFiles%\Meteoris` and normally requires
+an elevated PowerShell prompt:
+
+```powershell
+.\install.ps1 -System
+```
+
+On Windows the installer adds the install `bin` directory to `PATH` automatically.
+`-System` adds `%ProgramFiles%\Meteoris\bin` to the machine `PATH`; `-Local`
+adds `%LOCALAPPDATA%\Meteoris\bin` to the current user's `PATH`. The running
+PowerShell process is updated too, so `meteoris` and the helper commands can be
+called immediately after installation. Python commands are installed as a `.py`
+implementation plus a `.cmd` launcher, for example `meteoris_plot.cmd`.
+
+`runtime.daemon=true` and `--daemon` are Linux/POSIX-only. On Windows run
+`meteoris.exe` in the foreground, or use an external Windows service wrapper if
+a service deployment is required.
 
 ## Raspberry Pi with Raspberry Pi OS Trixie
 

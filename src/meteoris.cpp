@@ -47,14 +47,25 @@
 #include <ctime>
 #include <cerrno>
 #include <cstring>
+#include <hdf5.h>
+#include <memory>
+#include <cstdio>
+
+#if defined(_WIN32)
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#include <direct.h>
+#include <io.h>
+#include <sys/stat.h>
+#else
 #include <sys/stat.h>
 #include <sys/statvfs.h>
 #include <sys/types.h>
 #include <unistd.h>
-#include <hdf5.h>
-#include <memory>
-#include <cstdio>
 #include <fcntl.h>
+#endif
 #include <csignal>
 #include <thread>
 #include <mutex>
@@ -961,11 +972,22 @@ uint64_t systemNowNs()
     return static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(now).count());
 }
 
+void gmtimeUtc(const std::time_t value, std::tm &out)
+{
+#if defined(_WIN32)
+    if (::gmtime_s(&out, &value) != 0)
+        throw std::runtime_error("gmtime_s failed");
+#else
+    if (::gmtime_r(&value, &out) == nullptr)
+        throw std::runtime_error("gmtime_r failed");
+#endif
+}
+
 std::string utcIso8601(const uint64_t ns)
 {
     const std::time_t sec = static_cast<std::time_t>(ns / 1000000000ULL);
     std::tm tmv{};
-    gmtime_r(&sec, &tmv);
+    gmtimeUtc(sec, tmv);
     char buf[64];
     const unsigned ms = static_cast<unsigned>((ns / 1000000ULL) % 1000ULL);
     std::snprintf(buf, sizeof(buf), "%04d-%02d-%02dT%02d:%02d:%02d.%03uZ",
@@ -985,7 +1007,7 @@ std::string rotationDayUtc(const uint64_t ns, const int rotateMinuteUtc)
                       - static_cast<int64_t>(rotateMinuteUtc) * 60;
     const std::time_t shifted = static_cast<std::time_t>(sec);
     std::tm tmv{};
-    gmtime_r(&shifted, &tmv);
+    gmtimeUtc(shifted, tmv);
     char buf[16];
     if (std::strftime(buf, sizeof(buf), "%Y%m%d", &tmv) == 0)
         throw std::runtime_error("Failed to format UTC rotation day");
@@ -1006,27 +1028,145 @@ std::string formatDailyRotateTime(const int minuteUtc)
 
 std::string hostnameString()
 {
+#if defined(_WIN32)
+    char h[MAX_COMPUTERNAME_LENGTH + 1] = {0};
+    DWORD size = static_cast<DWORD>(sizeof(h));
+    if (!::GetComputerNameA(h, &size)) return "unknown";
+    return std::string(h, size);
+#else
     char h[256] = {0};
     if (::gethostname(h, sizeof(h) - 1) != 0) return "unknown";
     return std::string(h);
+#endif
 }
 
-
-void ensureDirectory(const std::string &path)
+bool pathSeparator(const char c)
 {
-    if (path.empty() || path == ".") return;
-    std::string current;
-    if (path[0] == '/') current = "/";
-    std::istringstream ss(path);
-    std::string part;
-    while (std::getline(ss, part, '/'))
+    return c == '/' || c == '\\';
+}
+
+std::string normalizedPath(std::string path)
+{
+    std::replace(path.begin(), path.end(), '\\', '/');
+    return path;
+}
+
+void createDirectoryOne(const std::string &path)
+{
+#if defined(_WIN32)
+    if (::CreateDirectoryA(path.c_str(), nullptr) != 0) return;
+    const DWORD err = ::GetLastError();
+    if (err == ERROR_ALREADY_EXISTS)
     {
-        if (part.empty()) continue;
-        if (!current.empty() && current.back() != '/') current += '/';
-        current += part;
-        if (::mkdir(current.c_str(), 0755) != 0 && errno != EEXIST)
-            throw std::runtime_error("cannot create directory " + current + ": " + std::strerror(errno));
+        const DWORD attrs = ::GetFileAttributesA(path.c_str());
+        if (attrs != INVALID_FILE_ATTRIBUTES && (attrs & FILE_ATTRIBUTE_DIRECTORY)) return;
     }
+    throw std::runtime_error("cannot create directory " + path +
+                             " (Windows error " + std::to_string(err) + ")");
+#else
+    if (::mkdir(path.c_str(), 0755) != 0 && errno != EEXIST)
+        throw std::runtime_error("cannot create directory " + path + ": " + std::strerror(errno));
+#endif
+}
+
+void ensureDirectory(const std::string &inputPath)
+{
+    if (inputPath.empty() || inputPath == ".") return;
+
+    const std::string path = normalizedPath(inputPath);
+    std::string current;
+    size_t pos = 0;
+
+#if defined(_WIN32)
+    // Preserve a drive root (C:/) or UNC share root (//server/share) and only
+    // create directories below it. Forward slashes are accepted by Win32 APIs.
+    if (path.size() >= 3 && std::isalpha(static_cast<unsigned char>(path[0])) &&
+        path[1] == ':' && path[2] == '/')
+    {
+        current = path.substr(0, 3);
+        pos = 3;
+    }
+    else if (path.size() >= 2 && path[0] == '/' && path[1] == '/')
+    {
+        const size_t serverEnd = path.find('/', 2);
+        const size_t shareEnd = serverEnd == std::string::npos
+            ? std::string::npos : path.find('/', serverEnd + 1);
+        if (serverEnd == std::string::npos) return;
+        if (shareEnd == std::string::npos) return;
+        current = path.substr(0, shareEnd);
+        pos = shareEnd + 1;
+    }
+    else if (!path.empty() && path[0] == '/')
+    {
+        current = "/";
+        pos = 1;
+    }
+#else
+    if (!path.empty() && path[0] == '/')
+    {
+        current = "/";
+        pos = 1;
+    }
+#endif
+
+    while (pos <= path.size())
+    {
+        const size_t next = path.find('/', pos);
+        const std::string part = path.substr(pos, next == std::string::npos
+                                                  ? std::string::npos
+                                                  : next - pos);
+        if (!part.empty())
+        {
+            if (!current.empty() && current.back() != '/') current += '/';
+            current += part;
+            createDirectoryOne(current);
+        }
+        if (next == std::string::npos) break;
+        pos = next + 1;
+    }
+}
+
+bool fileExists(const std::string &path)
+{
+#if defined(_WIN32)
+    return ::GetFileAttributesA(path.c_str()) != INVALID_FILE_ATTRIBUTES;
+#else
+    return ::access(path.c_str(), F_OK) == 0;
+#endif
+}
+
+uint64_t fileSizeBytes(const std::string &path)
+{
+#if defined(_WIN32)
+    struct _stat64 st{};
+    if (::_stat64(path.c_str(), &st) != 0)
+        throw std::runtime_error("cannot stat output file " + path + ": " + std::strerror(errno));
+    return static_cast<uint64_t>(st.st_size);
+#else
+    struct stat st{};
+    if (::stat(path.c_str(), &st) != 0)
+        throw std::runtime_error("cannot stat output file " + path + ": " + std::strerror(errno));
+    return static_cast<uint64_t>(st.st_size);
+#endif
+}
+
+double freeDiskSpaceGb(const std::string &path)
+{
+#if defined(_WIN32)
+    ULARGE_INTEGER freeBytes{};
+    if (!::GetDiskFreeSpaceExA(path.c_str(), &freeBytes, nullptr, nullptr))
+    {
+        const DWORD err = ::GetLastError();
+        throw std::runtime_error("cannot query free disk space for " + path +
+                                 " (Windows error " + std::to_string(err) + ")");
+    }
+    return static_cast<double>(freeBytes.QuadPart) / (1024.0 * 1024.0 * 1024.0);
+#else
+    struct statvfs fs{};
+    if (::statvfs(path.c_str(), &fs) != 0)
+        throw std::runtime_error("cannot query free disk space for " + path + ": " + std::strerror(errno));
+    return (double(fs.f_bavail) * double(fs.f_frsize)) / (1024.0 * 1024.0 * 1024.0);
+#endif
 }
 
 void h5Check(const herr_t status, const char *what)
@@ -1224,10 +1364,7 @@ private:
             return;
         _lastStorageCheck = now;
 
-        struct stat st{};
-        if (::stat(_path.c_str(), &st) != 0)
-            throw std::runtime_error("cannot stat output file " + _path + ": " + std::strerror(errno));
-        const uint64_t bytes = static_cast<uint64_t>(st.st_size);
+        const uint64_t bytes = fileSizeBytes(_path);
 
         if (!_storageCheckInitialized)
         {
@@ -1259,12 +1396,7 @@ private:
 
         if (_cfg.outputMinFreeGb > 0.0)
         {
-            struct statvfs fs{};
-            if (::statvfs(_cfg.detectorOutputDirectory.c_str(), &fs) != 0)
-                throw std::runtime_error("cannot query free disk space for " +
-                                         _cfg.detectorOutputDirectory + ": " + std::strerror(errno));
-            const double freeGb =
-                (double(fs.f_bavail) * double(fs.f_frsize)) / (1024.0 * 1024.0 * 1024.0);
+            const double freeGb = freeDiskSpaceGb(_cfg.detectorOutputDirectory);
             if (freeGb < _cfg.outputMinFreeGb)
             {
                 std::ostringstream msg;
@@ -1313,10 +1445,11 @@ private:
         if (_file >= 0 && day == _day) return;
         close();
         _day = day;
-        const std::string sep = (_cfg.detectorOutputDirectory.empty() || _cfg.detectorOutputDirectory.back() == '/') ? "" : "/";
+        const std::string sep = (_cfg.detectorOutputDirectory.empty() ||
+                                 pathSeparator(_cfg.detectorOutputDirectory.back())) ? "" : "/";
         _path = _cfg.detectorOutputDirectory + sep + _cfg.detectorFilePrefix + "_" + day + ".h5";
         resetStorageSafety();
-        const bool exists = (::access(_path.c_str(), F_OK) == 0);
+        const bool exists = fileExists(_path);
         if (exists)
         {
             hid_t fapl = createFileAccessPlist();
@@ -2474,6 +2607,11 @@ void loadToml(Config &c, const std::string &path)
 
 void daemonizeProcess()
 {
+#if defined(_WIN32)
+    throw std::runtime_error(
+        "runtime.daemon/--daemon is not supported on Windows; run meteoris.exe "
+        "in the foreground or use an external Windows service wrapper");
+#else
     pid_t pid = ::fork();
     if (pid < 0) throw std::runtime_error("first fork failed: " + std::string(std::strerror(errno)));
     if (pid > 0) std::exit(EXIT_SUCCESS);
@@ -2501,13 +2639,13 @@ void daemonizeProcess()
         throw std::runtime_error("dup2(/dev/null) failed: " + std::string(std::strerror(e)));
     }
     if (nullFd > STDERR_FILENO) ::close(nullFd);
-
+#endif
 }
 
 
 std::string datedLogPath(const std::string &basePath, const std::string &day)
 {
-    const size_t slash = basePath.find_last_of('/');
+    const size_t slash = basePath.find_last_of("/\\");
     const size_t dot = basePath.find_last_of('.');
     if (dot != std::string::npos && (slash == std::string::npos || dot > slash))
         return basePath.substr(0, dot) + "_" + day + basePath.substr(dot);
@@ -2516,9 +2654,13 @@ std::string datedLogPath(const std::string &basePath, const std::string &day)
 
 std::string parentDirectory(const std::string &path)
 {
-    const size_t slash = path.find_last_of('/');
+    const size_t slash = path.find_last_of("/\\");
     if (slash == std::string::npos) return "";
-    if (slash == 0) return "/";
+    if (slash == 0) return path.substr(0, 1);
+#if defined(_WIN32)
+    if (slash == 2 && path.size() >= 3 && path[1] == ':')
+        return path.substr(0, 3);
+#endif
     return path.substr(0, slash);
 }
 
@@ -2602,12 +2744,17 @@ void configureLogging(const Config &cfg)
     {
         auto console = std::make_shared<spdlog::sinks::stdout_color_sink_mt>(
             cfg.logColor ? spdlog::color_mode::automatic : spdlog::color_mode::never);
+#ifndef _WIN32
+        // The ANSI sink exposes named colors.  The native Windows sink uses
+        // Win32 WORD attributes and already provides a suitable default
+        // level-to-color mapping, so keep its defaults on Windows.
         console->set_color(spdlog::level::trace, console->white);
         console->set_color(spdlog::level::debug, console->white);
         console->set_color(spdlog::level::info, console->green);
         console->set_color(spdlog::level::warn, console->yellow);
         console->set_color(spdlog::level::err, console->red);
         console->set_color(spdlog::level::critical, console->red_bold);
+#endif
         // Color only the complete formatted console line.
         console->set_pattern("%^%E.%e [%l] %v%$");
         sinks.push_back(console);

@@ -6,6 +6,24 @@ files in `doc/`.
 
 ## 1. Build and install
 
+### Dependencies
+
+The main build/runtime dependencies are:
+
+- CMake and a C++ compiler/toolchain.
+- SoapySDR core development files; install the matching SoapySDR hardware
+  module/driver for the SDR device you intend to use.
+- HDF5 development/runtime files. The recovery helper also needs the HDF5
+  command-line programs `h5dump`, `h5clear`, and `h5ls`.
+- spdlog development files.
+- FFTW3 is optional; Meteoris falls back to its internal Radix-2 FFT backend
+  when FFTW is unavailable.
+- Python 3.11+ for the helper tools. Full/viewer installs also need NumPy,
+  Matplotlib, and h5py.
+
+Platform-specific package names and installation details are in
+[INSTALL.md](INSTALL.md).
+
 ### Ubuntu/Kubuntu
 
 Install the dependencies described in [INSTALL.md](INSTALL.md), then from the
@@ -52,6 +70,67 @@ The recovery helper requires the distro HDF5 command-line tools (`h5dump`,
 `h5clear`, and `h5ls`; package `hdf5-tools` on Debian/Ubuntu/Raspberry Pi OS).
 
 For the complete native/cross-build procedure and dependencies, see
+[INSTALL.md](INSTALL.md).
+
+### Windows 11 x86/x64
+
+Supported Windows builds are x86/x64 only; Windows ARM/ARM64 is not supported.
+Use PowerShell from the repository root. A normal x64 full build is:
+
+```powershell
+.\build.ps1 -Mode full -Architecture x64
+```
+
+Recorder-only:
+
+```powershell
+.\build.ps1 -Mode recorder-only -Architecture x64
+```
+
+With an explicit Visual Studio generator:
+
+```powershell
+.\build.ps1 -Mode full -Architecture x64 -Generator "Visual Studio 17 2022"
+```
+
+`build.ps1` uses vcpkg automatically when `VCPKG_ROOT` is set. Otherwise it
+searches common Windows dependency locations such as `Program Files`,
+`C:\deps`, and supported sibling dependency trees. Explicit CMake options can
+be passed with `-CMakeOption`, for example:
+
+```powershell
+.\build.ps1 -CMakeOption '-DMETEORIS_USE_FFTW=OFF'
+```
+
+Install for the current user:
+
+```powershell
+.\install.ps1 -Local
+```
+
+The default local prefix is `%LOCALAPPDATA%\Meteoris`.
+
+Install system-wide from an elevated PowerShell:
+
+```powershell
+.\install.ps1 -System
+```
+
+The default system prefix is `%ProgramFiles%\Meteoris`. Both install modes add
+the installed `bin` directory to the appropriate Windows `PATH`, so commands
+such as `meteoris` can be invoked by name.
+
+If PowerShell marks the scripts as downloaded files and prompts before running
+them, unblock the trusted repository scripts once:
+
+```powershell
+Unblock-File .\build.ps1
+Unblock-File .\install.ps1
+```
+
+`--daemon` and `runtime.daemon=true` are Linux/POSIX-only; on Windows run
+Meteoris in the foreground or manage it with an external Windows service
+wrapper. For complete Windows dependency and build details, see
 [INSTALL.md](INSTALL.md).
 
 ## 2. Prepare a working directory

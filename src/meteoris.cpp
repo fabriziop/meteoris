@@ -79,15 +79,9 @@
 #include <spdlog/sinks/base_sink.h>
 
 #include "detector/detector.hpp"
+#include "dsp/simd_dot.hpp"
 #include "fft/fft_backend.hpp"
 #include "version.hpp"
-
-#if defined(__AVX2__)
-#include <immintrin.h>
-#endif
-#if defined(__ARM_NEON) || defined(__ARM_NEON__)
-#include <arm_neon.h>
-#endif
 
 #include <limits>
 
@@ -569,59 +563,8 @@ public:
 private:
     inline std::complex<float> dotComplex(const float *re, const float *im) const
     {
-        const float *h = _tapsReversed.data();
-        const size_t n = _tapsReversed.size();
-        size_t k = 0;
-        float accRe = 0.0f, accIm = 0.0f;
-
-#if defined(__AVX2__)
-        __m256 vr = _mm256_setzero_ps();
-        __m256 vi = _mm256_setzero_ps();
-        for (; k + 8 <= n; k += 8)
-        {
-            const __m256 vh = _mm256_loadu_ps(h + k);
-            const __m256 xr = _mm256_loadu_ps(re + k);
-            const __m256 xi = _mm256_loadu_ps(im + k);
-#if defined(__FMA__)
-            vr = _mm256_fmadd_ps(xr, vh, vr);
-            vi = _mm256_fmadd_ps(xi, vh, vi);
-#else
-            vr = _mm256_add_ps(vr, _mm256_mul_ps(xr, vh));
-            vi = _mm256_add_ps(vi, _mm256_mul_ps(xi, vh));
-#endif
-        }
-        alignas(32) float tr[8], ti[8];
-        _mm256_store_ps(tr, vr);
-        _mm256_store_ps(ti, vi);
-        for (size_t j = 0; j < 8; ++j) { accRe += tr[j]; accIm += ti[j]; }
-#elif defined(__ARM_NEON) || defined(__ARM_NEON__)
-        float32x4_t vr = vdupq_n_f32(0.0f);
-        float32x4_t vi = vdupq_n_f32(0.0f);
-        for (; k + 4 <= n; k += 4)
-        {
-            const float32x4_t vh = vld1q_f32(h + k);
-            vr = vmlaq_f32(vr, vld1q_f32(re + k), vh);
-            vi = vmlaq_f32(vi, vld1q_f32(im + k), vh);
-        }
-#if defined(__aarch64__)
-        accRe += vaddvq_f32(vr);
-        accIm += vaddvq_f32(vi);
-#else
-        float32x2_t sr = vadd_f32(vget_low_f32(vr), vget_high_f32(vr));
-        float32x2_t si = vadd_f32(vget_low_f32(vi), vget_high_f32(vi));
-        sr = vpadd_f32(sr, sr);
-        si = vpadd_f32(si, si);
-        accRe += vget_lane_f32(sr, 0);
-        accIm += vget_lane_f32(si, 0);
-#endif
-#endif
-        for (; k < n; ++k)
-        {
-            const float hk = h[k];
-            accRe += re[k] * hk;
-            accIm += im[k] * hk;
-        }
-        return {accRe, accIm};
+        return meteoris_simd::dotComplex(_tapsReversed.data(), re, im,
+                                         _tapsReversed.size());
     }
 
     void computeRange(std::vector<std::complex<float>> &out, const size_t begin,
@@ -3206,13 +3149,7 @@ int main(int argc, char **argv)
                         << "; actual DSP block size is the sample count returned by each SDR read");
         LOG_INFO_STREAM("RX_format=CS8 native, RX_path="
                         << (useDirect ? "acquireReadBuffer-zero-copy" : "readStream-copy-fallback"));
-#if defined(__AVX2__)
-        const char *simdName = "AVX2";
-#elif defined(__ARM_NEON) || defined(__ARM_NEON__)
-        const char *simdName = "NEON";
-#else
-        const char *simdName = "scalar/auto";
-#endif
+        const char *simdName = meteoris_simd::backendName();
         LOG_INFO_STREAM("NCO=" << (dsp.ncoUsesLut() ? "exact-LUT" : "recursive")
                         << (dsp.ncoUsesLut() ? (" period=" + std::to_string(dsp.ncoLutPeriod())) : std::string())
                         << ", FIR1=block-polyphase SIMD=" << simdName

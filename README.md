@@ -46,7 +46,7 @@ Without AI, this project probably would not exist.
   * Pluggable meteor signal detectors, including peak/track and
     Echoes-style automatic threshold detection.
   * Efficient HDF5 storage format for meteor-event data.
-  * Interactive configuration wizzard `meteoris_config`
+  * Interactive configuration wizard `meteoris_config`
   * Conservative `meteoris_recover_hdf5` helper for files left uncleanly closed.
   * Event-list display with details for each event.
   * Interactive event display with a time/frequency waterfall, an optional

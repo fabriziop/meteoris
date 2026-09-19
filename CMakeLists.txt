@@ -50,7 +50,7 @@ option(METEORIS_BUILD_SIM "Build the SoapySDR meteoris_sim plugin" ON)
 option(METEORIS_NATIVE_OPTIMIZATION "Optimize generated code for the build host CPU" ON)
 option(METEORIS_FAST_MATH "Enable fast floating-point math for DSP kernels" ON)
 option(METEORIS_USE_FFTW "Use FFTW3 for FFT instead of internal Radix-2 FFT" ON)
-option(METEORIS_X86_AVX2 "Compile x86/x64 code with an explicit AVX2 baseline" OFF)
+option(METEORIS_X86_AVX2 "Build the optional x86/x64 AVX2 runtime-dispatch kernel" ON)
 option(METEORIS_INSTALL_PLOT "Install the meteoris_plot viewer tool" ON)
 option(METEORIS_INSTALL_RECOVER_HDF5 "Install the meteoris_recover_hdf5 recovery tool" ON)
 option(METEORIS_INSTALL_CONFIG_TOOL "Install the interactive meteoris_config tool" ON)
@@ -163,13 +163,39 @@ else()
     message(STATUS "Building with internal Radix-2 FFT backend")
 endif()
 
+set(METEORIS_X86_TARGET OFF)
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|amd64|AMD64|i.86|x86|X86)$" OR
+   MSVC_CXX_ARCHITECTURE_ID MATCHES "^(X86|x64|X64)$")
+    set(METEORIS_X86_TARGET ON)
+endif()
+
 add_executable(meteoris
     src/meteoris.cpp
+    src/dsp/simd_dot.cpp
     src/detector/detector_registry.cpp
     src/detector/echoes_automatic_detector.cpp
     src/detector/peak_tracker_detector.cpp
     src/fft/fft_backend.cpp
 )
+
+# Keep the general x86/x64 binary at the platform baseline and isolate AVX2 in
+# one translation unit. The common dispatcher checks CPU + OS support once at
+# runtime before calling this kernel, so the same binary also runs on non-AVX2
+# x86/x64 systems.
+if(METEORIS_X86_TARGET AND METEORIS_X86_AVX2)
+    target_sources(meteoris PRIVATE src/dsp/simd_dot_avx2.cpp)
+    target_compile_definitions(meteoris PRIVATE METEORIS_HAVE_AVX2_KERNEL=1)
+    if(MSVC)
+        set_source_files_properties(src/dsp/simd_dot_avx2.cpp PROPERTIES
+            COMPILE_OPTIONS "/arch:AVX2")
+    elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+        set_source_files_properties(src/dsp/simd_dot_avx2.cpp PROPERTIES
+            COMPILE_OPTIONS "-mavx2")
+    endif()
+    message(STATUS "x86/x64 SIMD: AVX2 runtime-dispatch kernel enabled")
+elseif(METEORIS_X86_TARGET)
+    message(STATUS "x86/x64 SIMD: AVX2 kernel disabled; scalar baseline only")
+endif()
 
 target_include_directories(meteoris PRIVATE
     src
@@ -211,10 +237,6 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
         )
     endif()
 
-    if(METEORIS_X86_AVX2 AND CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|amd64|AMD64|i.86)$")
-        target_compile_options(meteoris PRIVATE -mavx2)
-    endif()
-
     if(METEORIS_CPU_TUNE)
         if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(aarch64|arm|armv7l|armv8l)$")
             target_compile_options(meteoris PRIVATE -mcpu=${METEORIS_CPU_TUNE})
@@ -224,7 +246,14 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
                 "processor '${CMAKE_SYSTEM_PROCESSOR}'")
         endif()
     elseif(METEORIS_NATIVE_OPTIMIZATION)
-        target_compile_options(meteoris PRIVATE -march=native)
+        if(METEORIS_X86_TARGET)
+            # Tune scheduling for the build host without raising the required
+            # x86 ISA baseline; AVX2 is isolated in its dispatched source file.
+            target_compile_options(meteoris PRIVATE -mtune=native)
+            message(STATUS "x86/x64 baseline kept portable; using -mtune=native plus runtime SIMD dispatch")
+        else()
+            target_compile_options(meteoris PRIVATE -march=native)
+        endif()
     endif()
 elseif(MSVC)
     # spdlog's bundled fmt requires UTF-8 source/execution character sets on MSVC.
@@ -232,12 +261,9 @@ elseif(MSVC)
     if(METEORIS_FAST_MATH)
         target_compile_options(meteoris PRIVATE /fp:fast)
     endif()
-    if(METEORIS_X86_AVX2)
-        target_compile_options(meteoris PRIVATE /arch:AVX2)
-    elseif(METEORIS_NATIVE_OPTIMIZATION)
+    if(METEORIS_NATIVE_OPTIMIZATION AND METEORIS_X86_TARGET)
         message(STATUS
-            "MSVC has no -march=native equivalent; using its default x86/x64 code generation. "
-            "Set METEORIS_X86_AVX2=ON to require AVX2.")
+            "MSVC x86/x64 baseline kept portable; AVX2 is selected at runtime when available.")
     endif()
 endif()
 

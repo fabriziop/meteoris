@@ -64,8 +64,14 @@ rm -rf build-full
 
 ### Portable build
 
-Native CPU optimization is enabled by default. Disable it when building
-binaries intended to run on a different CPU:
+Native CPU optimization is enabled by default. On x86/x86_64 the general
+executable remains at the compiler's baseline ISA: `-mtune=native` may tune
+scheduling, while AVX2 lives in a separate runtime-dispatched kernel. This
+means a normal x86/x86_64 build can run on CPUs without AVX2 and will select
+AVX2 automatically when the CPU and OS support it.
+
+On ARM64, native optimization may still raise CPU-specific tuning. Disable it
+when building an ARM64 binary intended for a different ARM64 CPU:
 
 ```bash
 ./build.sh -DMETEORIS_NATIVE_OPTIMIZATION=OFF
@@ -143,8 +149,12 @@ Additional CMake definitions can be supplied with `-CMakeOption`, for example:
 .\build.ps1 -Mode full -CMakeOption '-DMETEORIS_USE_FFTW=OFF'
 ```
 
-The default x64 build does not require AVX2. To deliberately build an AVX2-only
-binary, add `-DMETEORIS_X86_AVX2=ON`.
+The default x86/x64 build does not require AVX2. `METEORIS_X86_AVX2=ON` is
+the default and builds a separate AVX2 FIR kernel; Meteoris checks CPU and OS
+support at runtime and dispatches to it when safe, otherwise it uses the scalar
+baseline. Set `-DMETEORIS_X86_AVX2=OFF` only if you want to omit the AVX2
+kernel entirely. Startup logging reports `SIMD=AVX2(runtime)`, `SIMD=NEON`, or
+`SIMD=scalar` for the selected FIR1 implementation.
 
 ### Install
 

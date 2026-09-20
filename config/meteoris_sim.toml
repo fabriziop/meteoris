@@ -110,6 +110,21 @@ max_gain_db = -1
 # Maximum gain change per AGC update.
 max_step_db = 1.0
 
+
+[network]
+# Browser gateway interface. The sockets listen when enabled, but Meteoris only
+# queues/transmits PSD frames while meteoris_web has an active PSD connection.
+enabled = true
+# IPv4 interface to listen on; loopback is safest for a same-host gateway.
+bind_address = "127.0.0.1"
+# Binary PSD TCP stream port.
+psd_port = 5510
+# Reliable request/reply control TCP port.
+control_port = 5511
+# Best-effort network queue. When full, oldest network-only frames are dropped;
+# detector/recorder delivery is unaffected.
+queue_frames = 16
+
 [recording]
 # "triggered": detector controls recording.
 # "continuous": detector is ignored and PSDs are recorded in bounded segments.

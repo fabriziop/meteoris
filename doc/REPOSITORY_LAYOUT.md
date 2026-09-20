@@ -27,9 +27,13 @@ meteoris/
 │   │   ├── simd_dot.hpp          # SIMD dispatch interface
 │   │   ├── simd_dot.cpp          # Scalar/NEON implementation and runtime dispatch
 │   │   └── simd_dot_avx2.cpp     # Isolated x86/x64 AVX2 implementation
-│   └── fft/
-│       ├── fft_backend.cpp
-│       └── fft_backend.hpp
+│   ├── fft/
+│   │   ├── fft_backend.cpp
+│   │   └── fft_backend.hpp
+│   ├── network/
+│   │   ├── network_server.cpp    # PSD data and control TCP server
+│   │   └── network_server.hpp
+│   └── psd_frame.hpp             # Shared immutable PSD frame used by all consumers
 ├── sim/
 │   ├── CMakeLists.txt
 │   └── SoapyMeteorisSim.cpp      # SoapySDR simulator module
@@ -40,6 +44,11 @@ meteoris/
 │   ├── meteoris_config.cmd       # Windows launcher
 │   ├── meteoris_recover_hdf5.py
 │   └── meteoris_recover_hdf5.cmd # Windows launcher
+├── web/
+│   ├── meteoris_web.py           # Separate HTTP/WebSocket gateway process
+│   ├── index.html                # Browser user interface
+│   ├── app.js                    # Live waterfall, status, and control logic
+│   └── style.css                 # Browser interface styling
 ├── tests/
 │   ├── echoes_automatic_detector_test.cpp
 │   ├── simd_runtime_dispatch_test.py
@@ -48,6 +57,7 @@ meteoris/
 │   ├── meteoris_config_test.py
 │   ├── meteoris_plot_widget_reuse_test.py
 │   ├── meteoris_recover_hdf5_cli_test.py
+│   ├── meteoris_web_frontend_test.py
 │   └── version_consistency_test.py
 ├── config/
 │   ├── meteoris.toml
@@ -55,6 +65,7 @@ meteoris/
 │   └── meteoris_sim.toml
 ├── doc/
 │   ├── INSTALL.md
+│   ├── NETWORK_WEB.md             # PSD/control TCP and browser gateway architecture
 │   ├── REPOSITORY_LAYOUT.md
 │   ├── VERSIONING.md
 │   └── ...
@@ -172,3 +183,25 @@ plugins, and runtime dependencies are collected under one installation prefix.
 
 The development repository, including `.git/`, remains the reference source
 from which all target-specific build and install packages are produced.
+
+
+## Live web gateway files
+
+`web/meteoris_web.py` is the separate Python gateway process. `web/index.html`,
+`web/app.js`, and `web/style.css` are its browser assets. The gateway exposes
+the live browser interface and relays commands to the recorder over the TCP
+control channel.
+
+The C++ TCP server is implemented in `src/network/network_server.*`.
+`src/psd_frame.hpp` defines the shared immutable PSD frame used by the DSP
+front end and its in-process detector, recorder, and network consumers, so the
+same PSD payload can be referenced without copying it for each consumer.
+
+The PSD data connection is demand-driven: `meteoris_web` opens the recorder's
+PSD TCP stream only while at least one browser waterfall client is connected.
+The control/status channel can remain available independently. Network
+operation is configured through the `[network]` section of the Meteoris TOML
+configuration.
+
+See `doc/NETWORK_WEB.md` for the PSD framing, TCP control protocol, browser
+WebSocket flow, live-parameter behavior, and deployment notes.

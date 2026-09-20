@@ -41,6 +41,8 @@ SMART_ESSENTIAL = {
     "logging.file_enabled",
     "logging.file",
     "agc.enabled",
+    "network.enabled",
+    "network.bind_address",
     "recording.mode",
     "recording.segment_seconds",
     "recording.segment_count",

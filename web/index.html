@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Meteoris Live</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header><h1>Meteoris Live</h1><span id="connection">connecting…</span></header>
+<main>
+  <section class="panel spectrum-panel">
+    <div class="metrics"><span id="frequency">—</span><span id="gain">—</span><span id="frame">—</span></div>
+    <canvas id="waterfall" width="1200" height="520"></canvas>
+    <div class="range"><label>Floor dB/Hz <input id="floor" type="number" value="-130" step="5"></label><label>Ceiling dB/Hz <input id="ceiling" type="number" value="-60" step="5"></label></div>
+  </section>
+  <aside>
+    <section class="panel">
+      <h2>Live controls</h2>
+      <label>Center frequency (Hz)<input id="centerFrequency" type="number" step="1"></label>
+      <button data-set="sdr.center_frequency" data-input="centerFrequency">Apply frequency</button>
+      <label>Gain (dB)<input id="gainControl" type="number" step="0.1"></label>
+      <button data-set="sdr.gain" data-input="gainControl">Apply gain</button>
+      <p id="controlMessage"></p>
+    </section>
+    <section class="panel">
+      <h2>Effective TOML</h2>
+      <p class="hint">All parameters are visible. Frequency and gain are live; other parameters currently require restart.</p>
+      <textarea id="config" readonly></textarea>
+    </section>
+  </aside>
+</main>
+<script src="/app.js"></script>
+</body>
+</html>

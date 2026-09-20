@@ -1,6 +1,7 @@
 #include "dsp/simd_dot.hpp"
 
 #if defined(__ARM_NEON) || defined(__ARM_NEON__)
+#define METEORIS_HAVE_NEON 1
 #include <arm_neon.h>
 #endif
 
@@ -21,6 +22,7 @@ namespace
 {
 using DotFn = std::complex<float> (*)(const float *, const float *, const float *, std::size_t);
 
+#if !defined(METEORIS_HAVE_NEON)
 std::complex<float> dotComplexScalar(const float *h, const float *re,
                                      const float *im, const std::size_t n)
 {
@@ -34,8 +36,9 @@ std::complex<float> dotComplexScalar(const float *h, const float *re,
     }
     return {accRe, accIm};
 }
+#endif
 
-#if defined(__ARM_NEON) || defined(__ARM_NEON__)
+#if defined(METEORIS_HAVE_NEON)
 std::complex<float> dotComplexNeon(const float *h, const float *re,
                                    const float *im, const std::size_t n)
 {
@@ -110,7 +113,7 @@ Backend chooseBackend()
 #if defined(METEORIS_HAVE_AVX2_KERNEL)
     if (cpuSupportsAvx2()) return {&dotComplexAvx2, "AVX2(runtime)"};
 #endif
-#if defined(__ARM_NEON) || defined(__ARM_NEON__)
+#if defined(METEORIS_HAVE_NEON)
     return {&dotComplexNeon, "NEON"};
 #else
     return {&dotComplexScalar, "scalar"};

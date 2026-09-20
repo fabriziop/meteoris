@@ -6,14 +6,14 @@ supported by [SoapySDR drivers](https://github.com/pothosware/SoapySDR/wiki).
 
 It consists of a capture/recording program (`meteoris`) that continuously
 listens for incoming signals and saves them to a file when a meteor signal is
-detected. Furthermore, it consists of a set of tools.
-A plotting program (`meteoris_plot`) that
-reads recorded meteor-signal events and displays them one at a time
-as horizontal waterfall diagrams.
-A configuration wizard (`meteoris_config`) for an easy generation of a
-Meteoris configuration file from questions and answers.
-A conservative recovery helper (`meteoris_recover_hdf5`) for HDF5 files left
-unreadable after a crash, forced termination, or power loss.
+detected. The signals are recorded as time sequences of frequency power
+spectrum densities (PSDs). This data can be displayed interactively offline
+by a plotting program (`meteoris_plot`) as horizontal waterfall diagrams.
+Meteoris configuration files can be easily genereted by an interactive
+configuration wizard (`meteoris_config`).
+When `meteoris` is ungracefully terminated (kill, shutdown, crash,
+power loss), the recording file can become unreadable. It can be restored
+by a recovery tool (`meteoris_recover_hdf5`).
 A SoapySDR simulator driver is also available.
 It synthesizes typical meteor-scatter radio signals that can be
 recorded by Meteoris and is useful for adjusting critical receiver and detector
@@ -32,7 +32,7 @@ installed commands with `--version`.
 
 This project is completely AI-generated; the code has not been manually
 reviewed line by line. Only this README was originally handwritten. The
-authour provided the ideas, requirements, and some of the solutions.
+author provided the ideas, requirements, and some of the solutions.
 Without AI, this project probably would not exist.
 
 
@@ -46,7 +46,11 @@ Without AI, this project probably would not exist.
   * Pluggable meteor signal detectors, including peak/track and
     Echoes-style automatic threshold detection.
   * Efficient HDF5 storage format for meteor-event data.
-  * Interactive configuration wizard `meteoris_config`
+  * Interactive configuration wizard `meteoris_config`.
+  * Live `meteoris_web` browser waterfall and TCP control gateway; the DSP
+    publishes the same immutable PSD frames used by detector/recorder, without
+    duplicating PSD payloads for in-process fan-out. The PSD TCP stream is
+    demand-driven and is inactive when no browser waterfall is connected.
   * Conservative `meteoris_recover_hdf5` helper for files left uncleanly closed.
   * Event-list display with details for each event.
   * Interactive event display with a time/frequency waterfall, an optional
@@ -66,12 +70,14 @@ Windows x86/x64 uses the matching `build.ps1` entry point. Both offer the same
 two modes and include the HDF5 recovery command:
 
 - **Full:** `meteoris` + `meteoris_plot` + `meteoris_config` +
-  `meteoris_recover_hdf5`
-- **Recorder-only:** `meteoris` + `meteoris_config` + `meteoris_recover_hdf5`
+  `meteoris_recover_hdf5` + `meteoris_web`
+- **Recorder-only:** `meteoris` + `meteoris_config` + `meteoris_recover_hdf5` +
+  `meteoris_web`
 
 The recorder-only mode omits the plotting tool and simulator, but deliberately
-keeps both `meteoris_config` and `meteoris_recover_hdf5` so a headless recorder
-can create/review configuration files and recover files after an unclean shutdown.
+keeps `meteoris_config`, `meteoris_recover_hdf5`, and `meteoris_web` so a
+headless recorder can be configured/recovered locally and monitored from a
+browser.
 On Linux, run `./build.sh` and choose `1` or `2`, or use `--full` /
 `--recorder-only`; `install.sh` reuses the last successful build. On Windows,
 use `build.ps1 -Mode full` or `build.ps1 -Mode recorder-only`, followed by
@@ -530,6 +536,8 @@ further tuning to reduce false triggers caused by noise.
 [Recover HDF5 Output Files](./doc/RECOVER_HDF5.md)
 
 [BUG20260902: one-PSD spectrogram dropout after trigger ON](./doc/BUG20260902.md)
+
+**Live browser/network architecture:** see [NETWORK_WEB.md](doc/NETWORK_WEB.md).
 
 ### Notes
 

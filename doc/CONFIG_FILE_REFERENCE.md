@@ -1013,6 +1013,40 @@ AGC to react more aggressively.
 
 ---
 
+
+# `[network]` — live PSD and control gateway
+
+The optional network interface connects the DSP process to the separate
+`meteoris_web` browser gateway. It uses one binary TCP connection for PSD data
+and one reliable TCP connection for control. No PSD network queueing or
+transmission occurs until a PSD client is connected. See
+[NETWORK_WEB.md](NETWORK_WEB.md) for protocol details.
+
+## `enabled`
+
+Enables the two Meteoris TCP listeners. Default: `true` in the supplied
+template.
+
+## `bind_address`
+
+IPv4 address on which Meteoris listens. Use `127.0.0.1` when the web gateway is
+on the same host. Use an externally reachable interface only on a trusted
+network because the native control protocol has no TLS/authentication.
+
+## `psd_port`
+
+TCP port for the binary live PSD stream. Default: `5510`.
+
+## `control_port`
+
+TCP port for the request/reply control channel. Default: `5511`.
+
+## `queue_frames`
+
+Maximum number of shared PSD frame references waiting for network transmission.
+If a connected web client falls behind, the oldest network reference is dropped.
+This never drops frames from the detector/recorder path. Default: `16`.
+
 # `[recording]` — recorder operating mode
 
 ```toml

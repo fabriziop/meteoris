@@ -54,6 +54,8 @@ option(METEORIS_X86_AVX2 "Build the optional x86/x64 AVX2 runtime-dispatch kerne
 option(METEORIS_INSTALL_PLOT "Install the meteoris_plot viewer tool" ON)
 option(METEORIS_INSTALL_RECOVER_HDF5 "Install the meteoris_recover_hdf5 recovery tool" ON)
 option(METEORIS_INSTALL_CONFIG_TOOL "Install the interactive meteoris_config tool" ON)
+
+option(METEORIS_INSTALL_WEB "Install the meteoris_web browser gateway" ON)
 set(METEORIS_CPU_TUNE "" CACHE STRING "Optional CPU tuning value used as -mcpu=<value>")
 
 if(CMAKE_CROSSCOMPILING AND METEORIS_NATIVE_OPTIMIZATION)
@@ -176,6 +178,7 @@ add_executable(meteoris
     src/detector/echoes_automatic_detector.cpp
     src/detector/peak_tracker_detector.cpp
     src/fft/fft_backend.cpp
+    src/network/network_server.cpp
 )
 
 # Keep the general x86/x64 binary at the platform baseline and isolate AVX2 in
@@ -217,6 +220,10 @@ target_link_libraries(meteoris PRIVATE
     Threads::Threads
     ${METEORIS_SPDLOG_TARGET}
 )
+
+if(WIN32)
+    target_link_libraries(meteoris PRIVATE ws2_32)
+endif()
 
 if(METEORIS_USE_FFTW)
     target_link_libraries(meteoris PRIVATE ${METEORIS_FFT_LIBRARIES})
@@ -340,6 +347,20 @@ endif()
 
 if(METEORIS_INSTALL_PLOT)
     meteoris_prepare_python_tool(meteoris_plot meteoris_plot.py)
+endif()
+
+if(METEORIS_INSTALL_WEB)
+    if(WIN32)
+        install(PROGRAMS web/meteoris_web.py web/meteoris_web.cmd
+                DESTINATION ${CMAKE_INSTALL_BINDIR}
+                COMPONENT meteoris_runtime)
+    else()
+        install(PROGRAMS web/meteoris_web.py DESTINATION ${CMAKE_INSTALL_BINDIR}
+                RENAME meteoris_web COMPONENT meteoris_runtime)
+    endif()
+    install(FILES web/index.html web/app.js web/style.css
+            DESTINATION ${CMAKE_INSTALL_DATADIR}/meteoris/web
+            COMPONENT meteoris_runtime)
 endif()
 
 install(TARGETS meteoris

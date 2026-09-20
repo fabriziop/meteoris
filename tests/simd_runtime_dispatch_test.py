@@ -24,6 +24,9 @@ def main() -> int:
     assert '__builtin_cpu_supports("avx2")' in dispatch
     assert '_xgetbv(0)' in dispatch
     assert '"AVX2(runtime)"' in dispatch
+    assert '#define METEORIS_HAVE_NEON 1' in dispatch
+    assert '#if !defined(METEORIS_HAVE_NEON)' in dispatch
+    assert '#if defined(METEORIS_HAVE_NEON)' in dispatch
     assert 'dotComplexAvx2' in avx2
     assert '_mm256_mul_ps' in avx2
 

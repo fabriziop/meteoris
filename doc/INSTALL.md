@@ -34,11 +34,13 @@ sudo apt install \
     build-essential cmake pkg-config \
     libsoapysdr-dev soapysdr-tools \
     libhdf5-dev hdf5-tools libspdlog-dev \
-    python3-numpy python3-matplotlib python3-h5py
+    python3-numpy python3-matplotlib python3-h5py python3-aiohttp
 ```
 
 Python 3.11+ supplies `tomllib`. On older Python versions, install `tomli`
 or adapt the plotting tool accordingly.
+
+`aiohttp` is used by `meteoris_web` for its HTTP and browser WebSocket gateway.
 
 `hdf5-tools` is required by `meteoris_recover_hdf5` because the recovery helper
 uses the standard `h5dump`, `h5clear`, and `h5ls` utilities. It is therefore a
@@ -115,7 +117,7 @@ well. Availability is device-specific.
 For the Python plotting and HDF5 tools:
 
 ```powershell
-py -3 -m pip install numpy matplotlib h5py
+py -3 -m pip install numpy matplotlib h5py aiohttp
 ```
 
 `meteoris_recover_hdf5` also requires the HDF5 command-line programs `h5dump`,

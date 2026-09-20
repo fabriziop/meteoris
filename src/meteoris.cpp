@@ -79,6 +79,8 @@
 #include <spdlog/sinks/base_sink.h>
 
 #include "detector/detector.hpp"
+#include "psd_frame.hpp"
+#include "network/network_server.hpp"
 #include "dsp/simd_dot.hpp"
 #include "fft/fft_backend.hpp"
 #include "version.hpp"
@@ -230,6 +232,11 @@ struct Config
     double agcMinGain = -1.0; // <0 means use device range
     double agcMaxGain = -1.0; // <0 means use device range
     double agcMaxStepDb = 1.0;
+
+    // Optional meteoris_web TCP interface. Listening sockets exist when enabled,
+    // but PSD transmission and control activity start only while meteoris_web
+    // is actually connected.
+    meteoris_network::Config network;
 };
 
 double besselI0(const double x)
@@ -620,15 +627,6 @@ private:
     mutable std::vector<std::complex<float>> *_jobOut = nullptr;
 };
 
-struct PsdFrame
-{
-    uint64_t frameIndex = 0;
-    uint64_t centerSampleIndex = 0;
-    uint64_t timestampNs = 0;
-    std::vector<float> powerDensity; // W/Hz-like normalized PSD density
-    float gainDb = 0.0f;             // SDR gain applied while this PSD was acquired
-};
-
 class WelchBandPsd
 {
 public:
@@ -663,11 +661,14 @@ public:
     {
         const size_t n = std::max<size_t>(1, capacity);
         _frameRing.resize(n);
-        for (PsdFrame &frame : _frameRing)
-            frame.powerDensity.resize(_bandBins.size());
+        for (auto &slot : _frameRing)
+        {
+            if (!slot) slot = std::make_shared<PsdFrame>();
+            slot->powerDensity.resize(_bandBins.size());
+        }
         if (_frameWrite >= _frameRing.size()) _frameWrite = 0;
     }
-    void setFrameCallback(std::function<void(const PsdFrame &)> cb) { _callback = std::move(cb); }
+    void setFrameCallback(std::function<void(const PsdFramePtr &)> cb) { _callback = std::move(cb); }
     const std::vector<double> &frequencies() const { return _frequencies; }
 
     inline void consume(const std::complex<float> sample)
@@ -736,7 +737,13 @@ private:
         for (size_t i = 0; i < _nfft; ++i) _fft[i] = oldest[i] * _window[i];
         _fftPlan->execute(_fft);
 
-        PsdFrame &frame = _frameRing[_frameWrite];
+        std::shared_ptr<PsdFrame> &slot = _frameRing[_frameWrite];
+        if (!slot || slot.use_count() != 1)
+        {
+            slot = std::make_shared<PsdFrame>();
+            slot->powerDensity.resize(_bandBins.size());
+        }
+        PsdFrame &frame = *slot;
         if (++_frameWrite == _frameRing.size()) _frameWrite = 0;
 
         frame.frameIndex = _frames;
@@ -757,7 +764,7 @@ private:
             frame.powerDensity[j] = static_cast<float>(raw * _psdScale);
         }
         ++_frames;
-        if (_callback) _callback(frame);
+        if (_callback) _callback(std::static_pointer_cast<const PsdFrame>(slot));
     }
 
     double _fs;
@@ -771,7 +778,7 @@ private:
     std::shared_ptr<FftBackend> _fftPlan;
     std::vector<size_t> _bandBins;
     std::vector<double> _frequencies;
-    std::function<void(const PsdFrame &)> _callback;
+    std::function<void(const PsdFramePtr &)> _callback;
     size_t _write = 0;
     size_t _samples = 0;
     size_t _frames = 0;
@@ -780,7 +787,7 @@ private:
     uint64_t _startTimestampNs = 0;
     float _currentGainDb = 0.0f;
     double _psdScale = 0.0;
-    std::vector<PsdFrame> _frameRing;
+    std::vector<std::shared_ptr<PsdFrame>> _frameRing;
     size_t _frameWrite = 0;
 };
 
@@ -1676,12 +1683,11 @@ public:
         _postContextFrames = static_cast<size_t>(std::ceil(
             _cfg.detectorPostContextSeconds / _framePeriodSeconds));
         _pre.resize(_preContextFrames);
-        for (BufferedFrame &b : _pre)
-            b.frame.powerDensity.resize(_frequencies.size());
     }
 
-    void consume(const PsdFrame &frame)
+    void consume(const PsdFramePtr &framePtr)
     {
+        const PsdFrame &frame = *framePtr;
         const bool eventInProgressAtEntry = _active || _postRemaining > 0;
         _writer.tick(frame.timestampNs, eventInProgressAtEntry);
 
@@ -1808,7 +1814,7 @@ public:
                     _writer.tick(frame.timestampNs, false);
                 }
             }
-            remember(frame, metricDbHz);
+            remember(framePtr, metricDbHz);
             return;
         }
 
@@ -1821,7 +1827,7 @@ public:
             for (size_t i = 0; i < _preCount; ++i)
             {
                 const size_t preIndex = oldestPreIndex(i);
-                _writer.append(_pre[preIndex].frame, _eventId, 0,
+                _writer.append(*_pre[preIndex].frame, _eventId, 0,
                                _pre[preIndex].maxDb);
                 ++_savedFrames;
                 ++_eventSavedFrames;
@@ -1835,7 +1841,7 @@ public:
         }
         else
         {
-            remember(frame, metricDbHz);
+            remember(framePtr, metricDbHz);
         }
     }
 
@@ -1862,7 +1868,7 @@ public:
 private:
     struct BufferedFrame
     {
-        PsdFrame frame;
+        PsdFramePtr frame;
         float maxDb = -300.0f;
     };
 
@@ -1918,25 +1924,14 @@ private:
         resetEventTracking();
     }
 
-    void remember(const PsdFrame &frame, const float maxDb)
+    void remember(const PsdFramePtr &frame, const float maxDb)
     {
         if (_preContextFrames == 0) return;
         BufferedFrame &b = _pre[_preWrite];
-        copyFrame(b.frame, frame);
+        b.frame = frame;
         b.maxDb = maxDb;
         if (++_preWrite == _pre.size()) _preWrite = 0;
         if (_preCount < _pre.size()) ++_preCount;
-    }
-
-    static void copyFrame(PsdFrame &dst, const PsdFrame &src)
-    {
-        dst.frameIndex = src.frameIndex;
-        dst.centerSampleIndex = src.centerSampleIndex;
-        dst.timestampNs = src.timestampNs;
-        dst.gainDb = src.gainDb;
-        dst.powerDensity.resize(src.powerDensity.size());
-        std::copy(src.powerDensity.begin(), src.powerDensity.end(),
-                  dst.powerDensity.begin());
     }
 
     size_t oldestPreIndex(const size_t offset) const
@@ -1946,6 +1941,7 @@ private:
 
     void clearPre()
     {
+        for (BufferedFrame &b : _pre) b.frame.reset();
         _preWrite = 0;
         _preCount = 0;
     }
@@ -2077,8 +2073,8 @@ private:
 };
 
 
-// Acquisition/DSP must never wait for HDF5.  Completed PSD frames are copied
-// into this bounded queue and all detector/recording state is owned by the
+// Acquisition/DSP must never wait for HDF5. Completed PSD frames are retained
+// by shared immutable reference in this bounded queue and all detector/recording state is owned by the
 // worker thread.  In particular, trigger-time pre-context writes, compression,
 // SWMR flushes and filesystem latency cannot delay the next SDR read.
 class AsyncPsdRecorder
@@ -2100,8 +2096,6 @@ public:
         _queueCapacity = static_cast<size_t>(std::ceil(8.0 / framePeriodSeconds));
         _queueCapacity = std::max<size_t>(256, std::min<size_t>(4096, _queueCapacity));
         _queue.resize(_queueCapacity);
-        for (PsdFrame &slot : _queue)
-            slot.powerDensity.resize(frequencies.size());
 
         if (_continuous)
             _continuousRecorder.reset(new ContinuousPsdRecorder(
@@ -2124,7 +2118,7 @@ public:
     AsyncPsdRecorder(const AsyncPsdRecorder &) = delete;
     AsyncPsdRecorder &operator=(const AsyncPsdRecorder &) = delete;
 
-    bool enqueue(const PsdFrame &frame)
+    bool enqueue(const PsdFramePtr &frame)
     {
         {
             std::lock_guard<std::mutex> lock(_mutex);
@@ -2142,7 +2136,7 @@ public:
                                  << "; refusing to drop PSD data silently");
                 return false;
             }
-            copyFrame(_queue[_queueWrite], frame);
+            _queue[_queueWrite] = frame;
             if (++_queueWrite == _queueCapacity) _queueWrite = 0;
             ++_queueCount;
             _queued.store(_queueCount, std::memory_order_release);
@@ -2210,7 +2204,7 @@ private:
         {
             for (;;)
             {
-                PsdFrame *frame = nullptr;
+                PsdFramePtr frame;
                 {
                     std::unique_lock<std::mutex> lock(_mutex);
                     _cv.wait(lock, [this] {
@@ -2223,7 +2217,7 @@ private:
                     }
                     // Keep this slot counted/in-use while processing it.  The
                     // producer therefore cannot wrap around and overwrite it.
-                    frame = &_queue[_queueRead];
+                    frame = _queue[_queueRead];
                     _workerBusy.store(true, std::memory_order_release);
                 }
 
@@ -2235,12 +2229,13 @@ private:
                 }
                 else
                 {
-                    _detectorRecorder->consume(*frame);
+                    _detectorRecorder->consume(frame);
                     _eventInProgress.store(_detectorRecorder->eventInProgress(),
                                            std::memory_order_release);
                 }
                 {
                     std::lock_guard<std::mutex> lock(_mutex);
+                    _queue[_queueRead].reset();
                     if (++_queueRead == _queueCapacity) _queueRead = 0;
                     --_queueCount;
                     _queued.store(_queueCount, std::memory_order_release);
@@ -2258,17 +2253,6 @@ private:
         }
     }
 
-    static void copyFrame(PsdFrame &dst, const PsdFrame &src)
-    {
-        dst.frameIndex = src.frameIndex;
-        dst.centerSampleIndex = src.centerSampleIndex;
-        dst.timestampNs = src.timestampNs;
-        dst.gainDb = src.gainDb;
-        if (dst.powerDensity.size() != src.powerDensity.size())
-            dst.powerDensity.resize(src.powerDensity.size());
-        std::copy(src.powerDensity.begin(), src.powerDensity.end(),
-                  dst.powerDensity.begin());
-    }
 
     const bool _continuous;
     size_t _queueCapacity = 0;
@@ -2277,7 +2261,7 @@ private:
     std::thread _worker;
     mutable std::mutex _mutex;
     std::condition_variable _cv;
-    std::vector<PsdFrame> _queue;
+    std::vector<PsdFramePtr> _queue;
     size_t _queueRead = 0;
     size_t _queueWrite = 0;
     size_t _queueCount = 0;
@@ -2343,7 +2327,12 @@ std::string effectiveToml(const Config &c)
       << "clip_level = " << c.agcClipLevel << "\n"
       << "min_gain_db = " << c.agcMinGain << "\n"
       << "max_gain_db = " << c.agcMaxGain << "\n"
-      << "max_step_db = " << c.agcMaxStepDb << "\n\n[recording]\n"
+      << "max_step_db = " << c.agcMaxStepDb << "\n\n[network]\n"
+      << "enabled = " << (c.network.enabled ? "true" : "false") << "\n"
+      << "bind_address = \"" << c.network.bindAddress << "\"\n"
+      << "psd_port = " << c.network.psdPort << "\n"
+      << "control_port = " << c.network.controlPort << "\n"
+      << "queue_frames = " << c.network.queueFrames << "\n\n[recording]\n"
       << "mode = \"" << c.recordingMode << "\"\n"
       << "segment_seconds = " << c.recordingSegmentSeconds << "\n"
       << "segment_count = " << c.recordingSegmentCount << "\n\n[detector]\n"
@@ -2488,6 +2477,11 @@ void applyTomlValue(Config &c, const std::string &key, const std::string &raw)
     else if (key == "agc.min_gain_db") c.agcMinGain = std::stod(v);
     else if (key == "agc.max_gain_db") c.agcMaxGain = std::stod(v);
     else if (key == "agc.max_step_db") c.agcMaxStepDb = std::stod(v);
+    else if (key == "network.enabled") c.network.enabled = parseBool(v);
+    else if (key == "network.bind_address") c.network.bindAddress = unquote(v);
+    else if (key == "network.psd_port") c.network.psdPort = static_cast<uint16_t>(std::stoul(v));
+    else if (key == "network.control_port") c.network.controlPort = static_cast<uint16_t>(std::stoul(v));
+    else if (key == "network.queue_frames") c.network.queueFrames = static_cast<size_t>(std::stoull(v));
     else if (key == "recording.mode") c.recordingMode = unquote(v);
     else if (key == "recording.segment_seconds") c.recordingSegmentSeconds = std::stod(v);
     else if (key == "recording.segment_count") c.recordingSegmentCount = std::stoull(v);
@@ -3067,9 +3061,31 @@ int main(int argc, char **argv)
             (streamMtu + decimation - 1) / decimation + 2;
         const size_t maxPsdFramesPerRead =
             (maxFinalSamplesPerRead + cfg.nfft - 1) / (cfg.nfft / 2) + 2;
-        const size_t psdFrameRingCapacity =
-            std::max<size_t>(16, maxPsdFramesPerRead);
+        // The no-copy fan-out retains shared PSD frames in the async recorder
+        // queue and, in detector mode, in the pre-trigger context ring. Size the
+        // DSP frame ring for the maximum normal in-flight ownership so slots are
+        // reused instead of allocating a new PsdFrame/vector at ~120 Hz.
+        const double psdFramePeriodSeconds =
+            (outputRate > 0.0 && cfg.nfft > 0)
+                ? (double(cfg.nfft / 2) / outputRate) : 0.0;
+        if (!(psdFramePeriodSeconds > 0.0))
+            throw std::runtime_error("cannot derive PSD frame period");
+        size_t recorderQueueFrames = static_cast<size_t>(
+            std::ceil(8.0 / psdFramePeriodSeconds));
+        recorderQueueFrames = std::max<size_t>(256,
+            std::min<size_t>(4096, recorderQueueFrames));
+        const size_t detectorPreFrames =
+            cfg.recordingMode == "continuous" ? 0 : static_cast<size_t>(
+                std::ceil(cfg.detectorPreContextSeconds / psdFramePeriodSeconds));
+        const size_t networkQueueFrames = cfg.network.enabled ? cfg.network.queueFrames : 0;
+        const size_t psdFrameRingCapacity = std::max<size_t>(
+            16, recorderQueueFrames + detectorPreFrames + networkQueueFrames +
+                maxPsdFramesPerRead + 8);
         dsp.psd().setFrameRingCapacity(psdFrameRingCapacity);
+        LOG_DEBUG_STREAM("PSD_shared_frame_pool=" << psdFrameRingCapacity
+                         << " frames; recorder_queue=" << recorderQueueFrames
+                         << " detector_pre=" << detectorPreFrames
+                         << " network_queue=" << networkQueueFrames);
         size_t directBuffers = 0;
         bool useDirect = cfg.direct;
         if (useDirect)
@@ -3207,15 +3223,28 @@ int main(int argc, char **argv)
         md.decim2 = cfg.decim2;
         md.nfft = cfg.nfft;
 
-        std::vector<const PsdFrame *> pendingPsdFrames;
+        std::vector<PsdFramePtr> pendingPsdFrames;
         pendingPsdFrames.reserve(psdFrameRingCapacity);
         dsp.psd().setFrameCallback(
-            [&pendingPsdFrames](const PsdFrame &f) {
-                pendingPsdFrames.push_back(&f);
+            [&pendingPsdFrames](const PsdFramePtr &f) {
+                pendingPsdFrames.push_back(f);
             });
 
         recorder.reset(new AsyncPsdRecorder(
             cfg, dsp.psd().frequencies(), md));
+
+        const auto &psdFreq = dsp.psd().frequencies();
+        const double frequencyStartHz = psdFreq.empty() ? 0.0 : psdFreq.front();
+        const double frequencyStepHz = psdFreq.size() > 1 ? psdFreq[1] - psdFreq[0] : 0.0;
+        std::unique_ptr<meteoris_network::Server> network;
+        if (cfg.network.enabled)
+        {
+            network.reset(new meteoris_network::Server(
+                cfg.network, frequencyStartHz, frequencyStepHz, md.tomlText));
+            network->setRuntimeState(currentFrequency, currentGain);
+        }
+        else
+            spdlog::info("network=OFF");
 
         const int actRet = dev->activateStream(rxStream);
         if (actRet != 0)
@@ -3331,17 +3360,60 @@ int main(int argc, char **argv)
             if (heldDirect) dev->releaseReadBuffer(rxStream, handle);
             if (cfg.agcEnabled)
                 currentGain = agc.update(clippedComplex, got, double(got) / cfg.sampleRate);
+            // Do not touch the network atomics in the acquisition hot loop when
+            // no web client exists. The initial state is set at construction and
+            // live state resumes as soon as a PSD/control client connects.
+            if (network && network->hasClient())
+                network->setRuntimeState(currentFrequency, currentGain);
 
-            // Detector/event/HDF5 work runs on the dedicated recorder thread.
-            // Copy completed PSD frames into its bounded queue and return to
-            // SDR acquisition without waiting for disk I/O.
-            for (const PsdFrame *psdFrame : pendingPsdFrames)
+            // Detector/recorder and network are independent consumers of the
+            // exact same immutable PSD frame. Queueing shares ownership only;
+            // the PSD payload is not copied. Network is best-effort and only
+            // retains frames while meteoris_web has a PSD connection.
+            for (const PsdFramePtr &psdFrame : pendingPsdFrames)
             {
-                if (!recorder->enqueue(*psdFrame))
+                if (!recorder->enqueue(psdFrame))
                 {
                     recorder->throwIfFailed();
                     throw std::runtime_error(
                         "PSD recorder queue overrun; acquisition stopped to preserve data integrity");
+                }
+                if (network) network->publish(psdFrame);
+            }
+
+            // Apply browser control commands on the acquisition thread. This
+            // keeps SoapySDR device mutation serialized with DSP acquisition.
+            if (network)
+            {
+                meteoris_network::ControlCommand command;
+                while (network->tryPopControl(command))
+                {
+                    try
+                    {
+                        double applied = command.value;
+                        if (command.parameter == "sdr.center_frequency")
+                        {
+                            dev->setFrequency(SOAPY_SDR_RX, 0, command.value);
+                            currentFrequency = dev->getFrequency(SOAPY_SDR_RX, 0);
+                            applied = currentFrequency;
+                        }
+                        else if (command.parameter == "sdr.gain")
+                        {
+                            if (cfg.agcEnabled)
+                                throw std::runtime_error("agc_enabled");
+                            dev->setGain(SOAPY_SDR_RX, 0, command.value);
+                            currentGain = dev->getGain(SOAPY_SDR_RX, 0);
+                            applied = currentGain;
+                        }
+                        else
+                            throw std::runtime_error("unsupported_parameter");
+                        network->setRuntimeState(currentFrequency, currentGain);
+                        network->completeControl(command.id, true, "ok", applied);
+                    }
+                    catch (const std::exception &e)
+                    {
+                        network->completeControl(command.id, false, e.what(), 0.0);
+                    }
                 }
             }
 
@@ -3372,6 +3444,12 @@ int main(int argc, char **argv)
             recorder->stopAndDrain();
             recorder->printSummary();
             recorder.reset();
+        }
+        if (network)
+        {
+            LOG_INFO_STREAM("network_psd_frames_sent=" << network->framesSent()
+                            << " dropped=" << network->framesDropped());
+            network.reset();
         }
 
         if (gStopRequested)

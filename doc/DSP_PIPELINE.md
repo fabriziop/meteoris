@@ -49,10 +49,10 @@ native interleaved CS8 I,Q
         |
         | selected +/- B/2 bins
         v
-PsdFrame
+immutable PsdFrame (shared ownership)
         |
-        +--> detector
-        +--> triggered HDF5 recording
+        +--> detector / recording worker
+        +--> TCP PSD network consumer (only while meteoris_web is connected)
 ```
 
 For the common configuration:
@@ -87,6 +87,27 @@ D = D1 * D2 = 8 * 5 = 40
 ```
 
 ---
+
+
+## PSD frame ownership and fan-out
+
+A completed PSD is represented by one immutable `PsdFrame`. The Welch stage
+places it in shared ownership (`shared_ptr<const PsdFrame>`) and fans out that
+same object to downstream consumers. The detector/recorder queue, detector
+pre-trigger context, and TCP network queue retain references to the same PSD
+payload; they do not duplicate the `powerDensity` vector.
+
+The recorder path is integrity-preserving and treats queue overrun as a fatal
+condition. The network path is best-effort and drops oldest network references
+when its bounded queue fills. Network publication is a no-op when no
+`meteoris_web` PSD client is connected.
+
+To keep the no-copy design from turning into allocator churn, the DSP
+preallocates enough shared frame slots for the recorder queue, detector
+pre-trigger context, network queue, and frames that can be produced by one SDR
+read. In steady state those slots are reused; a new PSD payload allocation is
+only a fallback if ownership unexpectedly outlives the designed retention
+window. See [NETWORK_WEB.md](NETWORK_WEB.md).
 
 ## 2. SDR input representation
 
@@ -933,8 +954,9 @@ This is useful when interpreting absolute or relative PSD levels.
 
 After a PSD frame is constructed, the PSD engine invokes its configured
 callback.  The acquisition thread does not run detector or HDF5 work there.
-Instead, the completed frame is copied into a bounded, preallocated recorder
-ring and the acquisition loop immediately continues with SDR input.
+Instead, a shared immutable reference to the completed frame is placed into the
+bounded recorder queue and the acquisition loop immediately continues with SDR
+input. The PSD payload itself is not copied.
 
 The dedicated recorder thread consumes queued frames and sends them to:
 

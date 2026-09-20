@@ -4,6 +4,19 @@ A compact reference for installing, configuring, running, and inspecting
 Meteoris. For details and parameter explanations, use the main README and the
 files in `doc/`.
 
+
+## Live browser waterfall/control
+
+Enable the `[network]` section in `meteoris.toml`, start Meteoris, then run:
+
+```bash
+meteoris_web --dsp-host 127.0.0.1
+```
+
+Open `http://127.0.0.1:8080/`. The gateway receives the live PSD TCP stream and
+exposes the browser waterfall plus the TCP control channel. See
+[NETWORK_WEB.md](NETWORK_WEB.md) for remote-host settings and protocol details.
+
 ## 1. Build and install
 
 ### Dependencies
@@ -19,7 +32,7 @@ The main build/runtime dependencies are:
 - FFTW3 is optional; Meteoris falls back to its internal Radix-2 FFT backend
   when FFTW is unavailable.
 - Python 3.11+ for the helper tools. Full/viewer installs also need NumPy,
-  Matplotlib, and h5py.
+  Matplotlib, h5py, and aiohttp (`meteoris_web`).
 
 Platform-specific package names and installation details are in
 [INSTALL.md](INSTALL.md).
@@ -60,11 +73,11 @@ Use the same build entry point as every other Linux host:
 ```
 
 Choose `1` for full or `2` for recorder-only, or use `--full` /
-`--recorder-only`. Both modes include `meteoris_config` and
-`meteoris_recover_hdf5`:
+`--recorder-only`. Both modes include `meteoris_config`, `meteoris_recover_hdf5`, and
+`meteoris_web`:
 
-- full: `meteoris` + `meteoris_plot` + `meteoris_config` + `meteoris_recover_hdf5`
-- recorder-only: `meteoris` + `meteoris_config` + `meteoris_recover_hdf5`
+- full: `meteoris` + `meteoris_plot` + `meteoris_config` + `meteoris_recover_hdf5` + `meteoris_web`
+- recorder-only: `meteoris` + `meteoris_config` + `meteoris_recover_hdf5` + `meteoris_web`
 
 The recovery helper requires the distro HDF5 command-line tools (`h5dump`,
 `h5clear`, and `h5ls`; package `hdf5-tools` on Debian/Ubuntu/Raspberry Pi OS).

@@ -1,7 +1,9 @@
 const canvas = document.getElementById('waterfall');
 const ctx = canvas.getContext('2d', {alpha: false});
+const orientationButton = document.getElementById('waterfallOrientation');
 let pending = [];
 let lastBins = 0;
+let waterfallOrientation = 'horizontal';
 
 function palette(t) {
   t = Math.max(0, Math.min(1, t));
@@ -28,9 +30,14 @@ function parseFrame(buf) {
   };
 }
 
-function drawRow(frame) {
-  const floor = Number(document.getElementById('floor').value);
-  const ceiling = Number(document.getElementById('ceiling').value);
+function updateFrameMetrics(frame) {
+  document.getElementById('frequency').textContent = `${(frame.centerHz/1e6).toFixed(6)} MHz`;
+  document.getElementById('gain').textContent = `${frame.gainDb.toFixed(1)} dB`;
+  document.getElementById('frame').textContent = `PSD #${frame.index}`;
+  if (lastBins !== frame.bins) lastBins = frame.bins;
+}
+
+function drawVertical(frame, floor, ceiling) {
   ctx.drawImage(canvas, 0, 0, canvas.width, canvas.height-1, 0, 1, canvas.width, canvas.height-1);
   const row = ctx.createImageData(canvas.width, 1);
   for (let x=0; x<canvas.width; x++) {
@@ -41,18 +48,47 @@ function drawRow(frame) {
     const o = 4*x; row.data[o]=r; row.data[o+1]=g; row.data[o+2]=b; row.data[o+3]=255;
   }
   ctx.putImageData(row, 0, 0);
-  document.getElementById('frequency').textContent = `${(frame.centerHz/1e6).toFixed(6)} MHz`;
-  document.getElementById('gain').textContent = `${frame.gainDb.toFixed(1)} dB`;
-  document.getElementById('frame').textContent = `PSD #${frame.index}`;
-  if (lastBins !== frame.bins) lastBins = frame.bins;
+}
+
+function drawHorizontal(frame, floor, ceiling) {
+  ctx.drawImage(canvas, 1, 0, canvas.width-1, canvas.height, 0, 0, canvas.width-1, canvas.height);
+  const column = ctx.createImageData(1, canvas.height);
+  for (let y=0; y<canvas.height; y++) {
+    const k = Math.min(frame.bins-1, Math.floor(y * frame.bins / canvas.height));
+    const p = Math.max(frame.values[k], 1e-30);
+    const db = 10 * Math.log10(p);
+    const [r,g,b] = palette((db-floor)/(ceiling-floor));
+    const o = 4*y; column.data[o]=r; column.data[o+1]=g; column.data[o+2]=b; column.data[o+3]=255;
+  }
+  ctx.putImageData(column, canvas.width-1, 0);
+}
+
+function drawFrame(frame) {
+  const floor = Number(document.getElementById('floor').value);
+  const ceiling = Number(document.getElementById('ceiling').value);
+  if (waterfallOrientation === 'horizontal') drawHorizontal(frame, floor, ceiling);
+  else drawVertical(frame, floor, ceiling);
+  updateFrameMetrics(frame);
 }
 
 function animate() {
   const batch = pending.splice(0, 8);
-  for (const f of batch) drawRow(f);
+  for (const f of batch) drawFrame(f);
   requestAnimationFrame(animate);
 }
 requestAnimationFrame(animate);
+
+function setWaterfallOrientation(orientation) {
+  waterfallOrientation = orientation;
+  const horizontal = orientation === 'horizontal';
+  orientationButton.textContent = `Waterfall: ${orientation}`;
+  orientationButton.setAttribute('aria-pressed', horizontal ? 'true' : 'false');
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+}
+
+orientationButton.addEventListener('click', () => {
+  setWaterfallOrientation(waterfallOrientation === 'horizontal' ? 'vertical' : 'horizontal');
+});
 
 function connectPsd() {
   const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';

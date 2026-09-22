@@ -54,6 +54,17 @@ class MeteorisWebFrontendTest(unittest.TestCase):
         self.assertIn("sessionVersion ? ` ${sessionVersion}`", app)
         self.assertIn("`${connected ? 'connected' : 'connecting'} ${suffix}`", app)
 
+    def test_waterfall_orientation_toggle_defaults_horizontal(self) -> None:
+        html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
+        app = (ROOT / "web" / "app.js").read_text(encoding="utf-8")
+        self.assertIn('id="waterfallOrientation"', html)
+        self.assertIn('Waterfall: horizontal', html)
+        self.assertIn("let waterfallOrientation = 'horizontal';", app)
+        self.assertIn("function drawHorizontal(frame, floor, ceiling)", app)
+        self.assertIn("function drawVertical(frame, floor, ceiling)", app)
+        self.assertIn("canvas.width-1, 0", app)
+        self.assertIn("waterfallOrientation === 'horizontal' ? 'vertical' : 'horizontal'", app)
+
     def test_web_assets_disable_browser_cache(self) -> None:
         gateway = (ROOT / "web" / "meteoris_web.py").read_text(encoding="utf-8")
         self.assertIn('Cache-Control', gateway)

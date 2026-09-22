@@ -66,6 +66,17 @@ class MeteorisWebFrontendTest(unittest.TestCase):
         self.assertIn("frame.bins-1-Math.floor(y * frame.bins / canvas.height)", app)
         self.assertIn("waterfallOrientation === 'horizontal' ? 'vertical' : 'horizontal'", app)
 
+    def test_waterfall_uses_meteoris_plot_gqrx_palette(self) -> None:
+        app = (ROOT / "web" / "app.js").read_text(encoding="utf-8")
+        self.assertIn("Match meteoris_plot.gqrx_colormap()", app)
+        self.assertIn("if (i < 20)", app)
+        self.assertIn("else if (i < 70)", app)
+        self.assertIn("else if (i < 100)", app)
+        self.assertIn("else if (i < 150)", app)
+        self.assertIn("else if (i < 250)", app)
+        self.assertIn("const floor = Number(document.getElementById('floor').value);", app)
+        self.assertIn("const ceiling = Number(document.getElementById('ceiling').value);", app)
+
     def test_waterfall_stop_go_button_toggles_live_updates(self) -> None:
         html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
         app = (ROOT / "web" / "app.js").read_text(encoding="utf-8")

@@ -8,11 +8,31 @@ let waterfallOrientation = 'horizontal';
 let waterfallRunning = true;
 
 function palette(t) {
-  t = Math.max(0, Math.min(1, t));
-  const r = Math.max(0, Math.min(255, Math.round(255 * (1.6*t - 0.35))));
-  const g = Math.max(0, Math.min(255, Math.round(255 * (1.8*t - 0.55*Math.abs(2*t-1)))));
-  const b = Math.max(0, Math.min(255, Math.round(255 * (1.15 - 1.35*t))));
-  return [r,g,b];
+  // Match meteoris_plot.gqrx_colormap(): classic 256-entry Gqrx-like palette.
+  const i = Math.max(0, Math.min(255, Math.round(255 * t)));
+  let r, g, b;
+  if (i < 20) {
+    r = 0; g = 0; b = 0;
+  } else if (i < 70) {
+    r = 0; g = 0; b = 140 * (i - 20) / 50;
+  } else if (i < 100) {
+    r = 60 * (i - 70) / 30;
+    g = 125 * (i - 70) / 30;
+    b = 115 * (i - 70) / 30 + 140;
+  } else if (i < 150) {
+    r = 195 * (i - 100) / 50 + 60;
+    g = 130 * (i - 100) / 50 + 125;
+    b = 255 - 255 * (i - 100) / 50;
+  } else if (i < 250) {
+    r = 255;
+    g = 255 - 255 * (i - 150) / 100;
+    b = 0;
+  } else {
+    r = 255;
+    g = 255 * (i - 250) / 5;
+    b = 255 * (i - 250) / 5;
+  }
+  return [Math.round(r), Math.round(g), Math.round(b)];
 }
 
 function parseFrame(buf) {

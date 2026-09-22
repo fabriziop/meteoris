@@ -226,11 +226,13 @@ struct Server::PendingControl
 Server::Server(Config config,
                double frequencyStartHz,
                double frequencyStepHz,
-               std::string effectiveToml)
+               std::string effectiveToml,
+               std::string softwareVersion)
     : _config(std::move(config)),
       _frequencyStartHz(frequencyStartHz),
       _frequencyStepHz(frequencyStepHz),
-      _effectiveToml(std::move(effectiveToml))
+      _effectiveToml(std::move(effectiveToml)),
+      _softwareVersion(std::move(softwareVersion))
 {
     if (!_config.enabled) return;
     if (_config.queueFrames == 0) _config.queueFrames = 1;
@@ -431,7 +433,8 @@ void Server::controlLoop()
                 {
                     std::ostringstream s;
                     s << std::setprecision(15)
-                      << "STATUS {\"center_frequency\":" << _centerFrequencyHz.load()
+                      << "STATUS {\"version\":\"" << _softwareVersion << "\""
+                      << ",\"center_frequency\":" << _centerFrequencyHz.load()
                       << ",\"gain_db\":" << _gainDb.load()
                       << ",\"psd_connected\":" << (psdConnected() ? "true" : "false")
                       << ",\"frames_sent\":" << framesSent()

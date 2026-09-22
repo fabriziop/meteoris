@@ -179,11 +179,22 @@ def find_web_root(explicit: str | None) -> pathlib.Path:
     raise SystemExit("cannot locate Meteoris web assets; use --web-root")
 
 
-def make_app(gateway: Gateway, web_root: pathlib.Path) -> web.Application:
+def make_app(gateway: Gateway, web_root: pathlib.Path, listen_ip: str) -> web.Application:
     app = web.Application()
 
+    def static_response(path: pathlib.Path) -> web.FileResponse:
+        # The web UI is intentionally not cached. Meteoris is frequently
+        # updated in-place on observatory/Raspberry Pi systems; stale browser
+        # copies of index.html/app.js/style.css otherwise make a freshly
+        # installed UI appear unchanged.
+        response = web.FileResponse(path)
+        response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+        return response
+
     async def index(_request):
-        return web.FileResponse(web_root / "index.html")
+        return static_response(web_root / "index.html")
 
     async def config(_request):
         try:
@@ -193,6 +204,12 @@ def make_app(gateway: Gateway, web_root: pathlib.Path) -> web.Application:
             return web.json_response({"ok": True, "toml": value})
         except Exception as exc:
             return web.json_response({"ok": False, "error": str(exc)}, status=503)
+
+    async def session(_request):
+        # --listen is constant for the lifetime of this gateway process. The
+        # browser requests it once per page/session instead of repeating it in
+        # every live status poll.
+        return web.json_response({"ok": True, "listen_ip": listen_ip, "version": meteoris_version()})
 
     async def status(_request):
         try:
@@ -235,9 +252,10 @@ def make_app(gateway: Gateway, web_root: pathlib.Path) -> web.Application:
         return ws
 
     app.router.add_get("/", index)
-    app.router.add_get("/app.js", lambda r: web.FileResponse(web_root / "app.js"))
-    app.router.add_get("/style.css", lambda r: web.FileResponse(web_root / "style.css"))
+    app.router.add_get("/app.js", lambda r: static_response(web_root / "app.js"))
+    app.router.add_get("/style.css", lambda r: static_response(web_root / "style.css"))
     app.router.add_get("/api/config", config)
+    app.router.add_get("/api/session", session)
     app.router.add_get("/api/status", status)
     app.router.add_post("/api/set", set_parameter)
     app.router.add_get("/ws/psd", websocket)
@@ -258,7 +276,7 @@ def main():
     args = parser.parse_args()
 
     gateway = Gateway(args.dsp_host, args.psd_port, args.control_port)
-    app = make_app(gateway, find_web_root(args.web_root))
+    app = make_app(gateway, find_web_root(args.web_root), args.listen)
     web.run_app(app, host=args.listen, port=args.http_port, print=lambda s: print(s))
 
 

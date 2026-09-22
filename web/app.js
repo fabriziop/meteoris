@@ -58,12 +58,11 @@ function connectPsd() {
   const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
   const ws = new WebSocket(`${proto}//${location.host}/ws/psd`);
   ws.binaryType = 'arraybuffer';
-  ws.onopen = () => document.getElementById('connection').textContent = 'websocket connected';
   ws.onmessage = e => {
     const f = parseFrame(e.data); if (!f) return;
     pending.push(f); if (pending.length > 32) pending.splice(0, pending.length-32);
   };
-  ws.onclose = () => { document.getElementById('connection').textContent = 'reconnecting…'; setTimeout(connectPsd, 1000); };
+  ws.onclose = () => { setTimeout(connectPsd, 1000); };
 }
 connectPsd();
 
@@ -98,16 +97,39 @@ for (const [id, state] of Object.entries(liveInputs)) {
   });
 }
 
+
+let sessionListenIp = '';
+let sessionVersion = '';
+
+function setDspStatus(connected) {
+  const badge = document.getElementById('statusBadge');
+  const suffix = `to meteoris${sessionVersion ? ` ${sessionVersion}` : ''}${sessionListenIp ? ` - ip ${sessionListenIp}` : ''}`;
+  badge.textContent = `${connected ? 'connected' : 'connecting'} ${suffix}`;
+  badge.classList.toggle('connected', connected);
+  badge.classList.toggle('connecting', !connected);
+}
+
+async function refreshSessionInfo() {
+  const r = await fetch('/api/session');
+  const j = await r.json();
+  if (!j.ok) throw new Error(j.error || 'cannot read web session information');
+  sessionListenIp = j.listen_ip || '';
+  sessionVersion = j.version || '';
+  setDspStatus(false);
+}
+
 async function refreshStatus() {
   try {
     const r = await fetch('/api/status'); const j = await r.json();
     if (j.ok) {
       updateLiveInput('centerFrequency', j.status.center_frequency);
       updateLiveInput('gainControl', j.status.gain_db);
-      document.getElementById('connection').textContent = j.status.gateway_psd_connected ? 'DSP connected' : 'waiting for DSP PSD';
+      setDspStatus(true);
+    } else {
+      setDspStatus(false);
     }
   } catch (err) {
-    document.getElementById('connection').textContent = `status error: ${err.message || err}`;
+    setDspStatus(false);
   }
 }
 for (const b of document.querySelectorAll('button[data-set]')) b.onclick = async () => {
@@ -119,4 +141,7 @@ for (const b of document.querySelectorAll('button[data-set]')) b.onclick = async
   if (j.ok) liveInputs[inputId].dirty = false;
   await refreshStatus();
 };
-refreshConfig(); refreshStatus(); setInterval(refreshStatus, 2000);
+refreshConfig();
+refreshSessionInfo()
+  .catch(() => setDspStatus(false))
+  .finally(() => { refreshStatus(); setInterval(refreshStatus, 2000); });

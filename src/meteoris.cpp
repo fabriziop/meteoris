@@ -3240,7 +3240,7 @@ int main(int argc, char **argv)
         if (cfg.network.enabled)
         {
             network.reset(new meteoris_network::Server(
-                cfg.network, frequencyStartHz, frequencyStepHz, md.tomlText));
+                cfg.network, frequencyStartHz, frequencyStepHz, md.tomlText, METEORIS_VERSION));
             network->setRuntimeState(currentFrequency, currentGain);
         }
         else

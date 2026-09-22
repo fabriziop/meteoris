@@ -38,7 +38,8 @@ public:
     Server(Config config,
            double frequencyStartHz,
            double frequencyStepHz,
-           std::string effectiveToml);
+           std::string effectiveToml,
+           std::string softwareVersion);
     ~Server();
 
     Server(const Server &) = delete;
@@ -68,6 +69,7 @@ private:
     double _frequencyStartHz;
     double _frequencyStepHz;
     std::string _effectiveToml;
+    std::string _softwareVersion;
 
     std::atomic<bool> _stop{false};
     std::atomic<bool> _psdConnected{false};

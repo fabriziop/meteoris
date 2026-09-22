@@ -12,7 +12,10 @@
   <section class="panel spectrum-panel">
     <div class="spectrum-toolbar">
       <div class="metrics"><span id="frequency">—</span><span id="gain">—</span><span id="frame">—</span></div>
-      <button id="waterfallOrientation" class="orientation-toggle" type="button" aria-pressed="true">Waterfall: horizontal</button>
+      <div class="toolbar-actions">
+        <button id="waterfallToggle" class="toggle-button" type="button" aria-pressed="true">Stop waterfall</button>
+        <button id="waterfallOrientation" class="orientation-toggle" type="button" aria-pressed="true">Waterfall: horizontal</button>
+      </div>
     </div>
     <canvas id="waterfall" width="1200" height="520"></canvas>
     <div class="range"><label>Floor dB/Hz <input id="floor" type="number" value="-130" step="5"></label><label>Ceiling dB/Hz <input id="ceiling" type="number" value="-60" step="5"></label></div>

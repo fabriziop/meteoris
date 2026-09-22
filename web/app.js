@@ -1,9 +1,11 @@
 const canvas = document.getElementById('waterfall');
 const ctx = canvas.getContext('2d', {alpha: false});
 const orientationButton = document.getElementById('waterfallOrientation');
+const waterfallToggle = document.getElementById('waterfallToggle');
 let pending = [];
 let lastBins = 0;
 let waterfallOrientation = 'horizontal';
+let waterfallRunning = true;
 
 function palette(t) {
   t = Math.max(0, Math.min(1, t));
@@ -54,7 +56,8 @@ function drawHorizontal(frame, floor, ceiling) {
   ctx.drawImage(canvas, 1, 0, canvas.width-1, canvas.height, 0, 0, canvas.width-1, canvas.height);
   const column = ctx.createImageData(1, canvas.height);
   for (let y=0; y<canvas.height; y++) {
-    const k = Math.min(frame.bins-1, Math.floor(y * frame.bins / canvas.height));
+    // Frequency runs vertically: highest at the top, lowest at the bottom.
+    const k = Math.max(0, frame.bins-1-Math.floor(y * frame.bins / canvas.height));
     const p = Math.max(frame.values[k], 1e-30);
     const db = 10 * Math.log10(p);
     const [r,g,b] = palette((db-floor)/(ceiling-floor));
@@ -64,6 +67,7 @@ function drawHorizontal(frame, floor, ceiling) {
 }
 
 function drawFrame(frame) {
+  if (!waterfallRunning) return;
   const floor = Number(document.getElementById('floor').value);
   const ceiling = Number(document.getElementById('ceiling').value);
   if (waterfallOrientation === 'horizontal') drawHorizontal(frame, floor, ceiling);
@@ -72,11 +76,20 @@ function drawFrame(frame) {
 }
 
 function animate() {
-  const batch = pending.splice(0, 8);
-  for (const f of batch) drawFrame(f);
+  if (waterfallRunning) {
+    const batch = pending.splice(0, 8);
+    for (const f of batch) drawFrame(f);
+  }
   requestAnimationFrame(animate);
 }
 requestAnimationFrame(animate);
+
+function setWaterfallRunning(running) {
+  waterfallRunning = running;
+  waterfallToggle.textContent = waterfallRunning ? 'Stop waterfall' : 'Go waterfall';
+  waterfallToggle.setAttribute('aria-pressed', waterfallRunning ? 'true' : 'false');
+  if (!waterfallRunning) pending.length = 0;
+}
 
 function setWaterfallOrientation(orientation) {
   waterfallOrientation = orientation;
@@ -85,6 +98,11 @@ function setWaterfallOrientation(orientation) {
   orientationButton.setAttribute('aria-pressed', horizontal ? 'true' : 'false');
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 }
+
+waterfallToggle.addEventListener('click', () => {
+  waterfallRunning = !waterfallRunning;
+  setWaterfallRunning(waterfallRunning);
+});
 
 orientationButton.addEventListener('click', () => {
   setWaterfallOrientation(waterfallOrientation === 'horizontal' ? 'vertical' : 'horizontal');

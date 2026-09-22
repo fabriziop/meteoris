@@ -63,7 +63,18 @@ class MeteorisWebFrontendTest(unittest.TestCase):
         self.assertIn("function drawHorizontal(frame, floor, ceiling)", app)
         self.assertIn("function drawVertical(frame, floor, ceiling)", app)
         self.assertIn("canvas.width-1, 0", app)
+        self.assertIn("frame.bins-1-Math.floor(y * frame.bins / canvas.height)", app)
         self.assertIn("waterfallOrientation === 'horizontal' ? 'vertical' : 'horizontal'", app)
+
+    def test_waterfall_stop_go_button_toggles_live_updates(self) -> None:
+        html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
+        app = (ROOT / "web" / "app.js").read_text(encoding="utf-8")
+        self.assertIn('id="waterfallToggle"', html)
+        self.assertIn('Stop waterfall', html)
+        self.assertIn("let waterfallRunning = true;", app)
+        self.assertIn("waterfallRunning ? 'Stop waterfall' : 'Go waterfall'", app)
+        self.assertIn("if (!waterfallRunning) return;", app)
+        self.assertIn("waterfallRunning = !waterfallRunning;", app)
 
     def test_web_assets_disable_browser_cache(self) -> None:
         gateway = (ROOT / "web" / "meteoris_web.py").read_text(encoding="utf-8")

@@ -115,6 +115,16 @@ void installSignalHandlers()
     std::signal(SIGTERM, meteorisSignalHandler);
 }
 
+void emitTerminalBell()
+{
+#if defined(_WIN32)
+    MessageBeep(MB_OK);
+#else
+    std::fputc('\a', stderr);
+    std::fflush(stderr);
+#endif
+}
+
 #define METEORIS_LOG_STREAM(level, expr) \
     do { std::ostringstream _meteorisLogStream; _meteorisLogStream << expr; \
          spdlog::log(level, "{}", _meteorisLogStream.str()); } while (0)
@@ -208,6 +218,7 @@ struct Config
     // 0 disables the maximum-duration action. Rearm applies after a discard/cutoff.
     double detectorMaxEventSeconds = 15.0;
     double detectorRearmSeconds = 1.0;
+    bool detectorBeepOnRecordedEvent = false;
     // Keep compiled defaults consistent with config/meteoris.toml so a run
     // without a local config writes beneath the working directory, not into it.
     std::string detectorOutputDirectory = "./data";
@@ -1921,6 +1932,7 @@ private:
         spdlog::debug(
             "event_recorded detector={} event_id={} elapsed_s={:.3f} saved_frames={}",
             _cfg.detectorPlugin, _eventId, elapsedSeconds, _eventSavedFrames);
+        if (_cfg.detectorBeepOnRecordedEvent) emitTerminalBell();
         resetEventTracking();
     }
 
@@ -2343,7 +2355,8 @@ std::string effectiveToml(const Config &c)
       << "pre_context_s = " << c.detectorPreContextSeconds << "\n"
       << "post_context_s = " << c.detectorPostContextSeconds << "\n"
       << "max_event_seconds = " << c.detectorMaxEventSeconds << "\n"
-      << "rearm_seconds = " << c.detectorRearmSeconds << "\n";
+    << "rearm_seconds = " << c.detectorRearmSeconds << "\n"
+    << "beep_on_recorded_event = " << (c.detectorBeepOnRecordedEvent ? "true" : "false") << "\n";
 
     // Render detector-owned schema fields generically. The core only groups
     // dotted schema keys into TOML subsections; it does not know their types.
@@ -2493,6 +2506,7 @@ void applyTomlValue(Config &c, const std::string &key, const std::string &raw)
     else if (key == "detector.post_context_s") c.detectorPostContextSeconds = std::stod(v);
     else if (key == "detector.max_event_seconds") c.detectorMaxEventSeconds = std::stod(v);
     else if (key == "detector.rearm_seconds") c.detectorRearmSeconds = std::stod(v);
+    else if (key == "detector.beep_on_recorded_event") c.detectorBeepOnRecordedEvent = parseBool(v);
     else if (key.compare(0, 9, "detector.") == 0)
         c.detectorPluginConfig.set(key.substr(9), v);
     else if (key == "output.directory") c.detectorOutputDirectory = unquote(v);

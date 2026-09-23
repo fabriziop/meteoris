@@ -10,15 +10,25 @@
 <header><h1>Meteoris Live</h1></header>
 <main>
   <section class="panel spectrum-panel">
-    <div class="spectrum-toolbar">
-      <div class="metrics"><span id="frequency">—</span><span id="gain">—</span><span id="frame">—</span></div>
+    <div class="metrics"><span id="frequency">—</span><span id="gain">—</span><span id="frame">—</span></div>
+    <div id="waterfallStage" class="waterfall-stage horizontal">
+      <div id="frequencyScale" class="frequency-scale" aria-label="Frequency offset scale"></div>
+      <canvas id="waterfall" width="1200" height="520"></canvas>
+    </div>
+    <div class="spectrum-controls">
       <div class="toolbar-actions">
-        <button id="waterfallToggle" class="toggle-button" type="button" aria-pressed="true">Stop waterfall</button>
-        <button id="waterfallOrientation" class="orientation-toggle" type="button" aria-pressed="true">Waterfall: horizontal</button>
+        <button id="waterfallToggle" class="toggle-button" type="button" aria-pressed="true">Stop</button>
+        <button id="waterfallOrientation" class="orientation-toggle" type="button" aria-pressed="true">Vertical</button>
+      </div>
+      <div class="range level-controls">
+        <label>Min (dB/Hz) <input id="floor" type="number" value="-130" step="5"></label>
+        <label>Max (dB/Hz) <input id="ceiling" type="number" value="-60" step="5"></label>
+      </div>
+      <div class="range band-controls">
+        <label>Min freq. (Hz)<input id="bandMin" type="number" step="1"></label>
+        <label>Max freq. (Hz)<input id="bandMax" type="number" step="1"></label>
       </div>
     </div>
-    <canvas id="waterfall" width="1200" height="520"></canvas>
-    <div class="range"><label>Floor dB/Hz <input id="floor" type="number" value="-130" step="5"></label><label>Ceiling dB/Hz <input id="ceiling" type="number" value="-60" step="5"></label></div>
   </section>
   <aside>
     <section class="panel">

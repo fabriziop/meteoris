@@ -58,12 +58,12 @@ class MeteorisWebFrontendTest(unittest.TestCase):
         html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
         app = (ROOT / "web" / "app.js").read_text(encoding="utf-8")
         self.assertIn('id="waterfallOrientation"', html)
-        self.assertIn('Waterfall: horizontal', html)
+        self.assertIn('>Vertical</button>', html)
         self.assertIn("let waterfallOrientation = 'horizontal';", app)
         self.assertIn("function drawHorizontal(frame, floor, ceiling)", app)
         self.assertIn("function drawVertical(frame, floor, ceiling)", app)
         self.assertIn("canvas.width-1, 0", app)
-        self.assertIn("frame.bins-1-Math.floor(y * frame.bins / canvas.height)", app)
+        self.assertIn("range.last - Math.floor(y * count / canvas.height)", app)
         self.assertIn("waterfallOrientation === 'horizontal' ? 'vertical' : 'horizontal'", app)
 
     def test_waterfall_uses_meteoris_plot_gqrx_palette(self) -> None:
@@ -74,18 +74,91 @@ class MeteorisWebFrontendTest(unittest.TestCase):
         self.assertIn("else if (i < 100)", app)
         self.assertIn("else if (i < 150)", app)
         self.assertIn("else if (i < 250)", app)
-        self.assertIn("const floor = Number(document.getElementById('floor').value);", app)
-        self.assertIn("const ceiling = Number(document.getElementById('ceiling').value);", app)
+        self.assertIn("let floorDb = -130;", app)
+        self.assertIn("let ceilingDb = -60;", app)
+        self.assertIn("drawHorizontal(frame, floorDb, ceilingDb)", app)
 
     def test_waterfall_stop_go_button_toggles_live_updates(self) -> None:
         html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
         app = (ROOT / "web" / "app.js").read_text(encoding="utf-8")
         self.assertIn('id="waterfallToggle"', html)
-        self.assertIn('Stop waterfall', html)
+        self.assertIn('>Stop</button>', html)
         self.assertIn("let waterfallRunning = true;", app)
-        self.assertIn("waterfallRunning ? 'Stop waterfall' : 'Go waterfall'", app)
+        self.assertIn("waterfallRunning ? 'Stop' : 'Go'", app)
         self.assertIn("if (!waterfallRunning) return;", app)
         self.assertIn("waterfallRunning = !waterfallRunning;", app)
+
+
+    def test_waterfall_controls_are_below_canvas_and_labels_are_compact(self) -> None:
+        html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
+        canvas_pos = html.index('id="waterfall"')
+        controls_pos = html.index('class="spectrum-controls"')
+        self.assertGreater(controls_pos, canvas_pos)
+        self.assertNotIn('Stop waterfall', html)
+        self.assertNotIn('Waterfall: horizontal', html)
+
+    def test_frequency_scale_and_configured_band_controls(self) -> None:
+        html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
+        css = (ROOT / "web" / "style.css").read_text(encoding="utf-8")
+        app = (ROOT / "web" / "app.js").read_text(encoding="utf-8")
+        self.assertIn('id="frequencyScale"', html)
+        self.assertIn('id="bandMin"', html)
+        self.assertIn('id="bandMax"', html)
+        self.assertIn('.waterfall-stage.vertical', css)
+        self.assertIn('.waterfall-stage.horizontal', css)
+        self.assertIn("function parseConfiguredBandwidth(toml)", app)
+        self.assertIn("inDsp = section[1].trim() === 'dsp'", app)
+        self.assertIn("bandwidth_hz", app)
+        self.assertIn("bandMinHz = -bandwidthHz / 2", app)
+        self.assertIn("bandMaxHz = bandwidthHz / 2", app)
+        self.assertIn("function visibleBinRange(frame)", app)
+        self.assertIn("function updateFrequencyScale()", app)
+        self.assertIn("tick.style.top = `${100 - position}%`", app)
+
+    def test_frequency_scale_has_major_medium_and_minor_ticks(self) -> None:
+        css = (ROOT / "web" / "style.css").read_text(encoding="utf-8")
+        app = (ROOT / "web" / "app.js").read_text(encoding="utf-8")
+        self.assertIn("function scaleTickMarks(lo, hi)", app)
+        self.assertIn("subdivision === 2 ? 'medium' : 'minor'", app)
+        self.assertIn("kind: 'major'", app)
+        self.assertIn(".frequency-tick.medium::before", css)
+        self.assertIn(".frequency-tick.major::before", css)
+
+    def test_waterfall_controls_use_one_aligned_standardized_row(self) -> None:
+        css = (ROOT / "web" / "style.css").read_text(encoding="utf-8")
+        self.assertIn(".spectrum-controls {", css)
+        self.assertIn("align-items:flex-end", css)
+        self.assertIn("flex-wrap:nowrap", css)
+        self.assertIn('.spectrum-controls button { width:172px; }', css)
+        self.assertIn('.spectrum-controls input[type="number"] { width:118px;', css)
+        self.assertIn("border-color:#4a4a4a", css)
+
+
+    def test_vertical_scale_ticks_share_canvas_side_and_endpoint_labels_stay_inside(self) -> None:
+        css = (ROOT / "web" / "style.css").read_text(encoding="utf-8")
+        app = (ROOT / "web" / "app.js").read_text(encoding="utf-8")
+        self.assertIn(".waterfall-stage.vertical .frequency-tick {", css)
+        self.assertIn("bottom:0", css)
+        self.assertIn(".waterfall-stage.vertical .frequency-tick.edge-start", css)
+        self.assertIn(".waterfall-stage.vertical .frequency-tick.edge-end", css)
+        self.assertIn("tick.classList.add('edge-start')", app)
+        self.assertIn("tick.classList.add('edge-end')", app)
+
+    def test_orientation_button_names_the_target_orientation(self) -> None:
+        html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
+        app = (ROOT / "web" / "app.js").read_text(encoding="utf-8")
+        self.assertIn('>Vertical</button>', html)
+        self.assertIn("orientationButton.textContent = horizontal ? 'Vertical' : 'Horizontal';", app)
+
+    def test_numeric_control_edits_commit_on_enter(self) -> None:
+        app = (ROOT / "web" / "app.js").read_text(encoding="utf-8")
+        self.assertNotIn("bandMinInput.addEventListener('change'", app)
+        self.assertNotIn("bandMaxInput.addEventListener('change'", app)
+        self.assertIn("function applyLevelInputs()", app)
+        self.assertIn("if (e.key === 'Enter')", app)
+        self.assertIn("applyLevelInputs();", app)
+        self.assertIn("applyBandInputs();", app)
+        self.assertIn("document.querySelector(`button[data-input=\"${id}\"]`)?.click();", app)
 
     def test_web_assets_disable_browser_cache(self) -> None:
         gateway = (ROOT / "web" / "meteoris_web.py").read_text(encoding="utf-8")

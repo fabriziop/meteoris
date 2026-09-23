@@ -1,11 +1,20 @@
 const canvas = document.getElementById('waterfall');
 const ctx = canvas.getContext('2d', {alpha: false});
+const waterfallStage = document.getElementById('waterfallStage');
+const frequencyScale = document.getElementById('frequencyScale');
 const orientationButton = document.getElementById('waterfallOrientation');
 const waterfallToggle = document.getElementById('waterfallToggle');
+const bandMinInput = document.getElementById('bandMin');
+const bandMaxInput = document.getElementById('bandMax');
 let pending = [];
 let lastBins = 0;
 let waterfallOrientation = 'horizontal';
 let waterfallRunning = true;
+let configuredBandwidthHz = null;
+let bandMinHz = null;
+let bandMaxHz = null;
+let floorDb = -130;
+let ceilingDb = -60;
 
 function palette(t) {
   // Match meteoris_plot.gqrx_colormap(): classic 256-entry Gqrx-like palette.
@@ -59,11 +68,99 @@ function updateFrameMetrics(frame) {
   if (lastBins !== frame.bins) lastBins = frame.bins;
 }
 
+function parseConfiguredBandwidth(toml) {
+  let inDsp = false;
+  for (const rawLine of toml.split(/\r?\n/)) {
+    const line = rawLine.replace(/#.*/, '').trim();
+    if (!line) continue;
+    const section = line.match(/^\[([^\]]+)\]$/);
+    if (section) {
+      inDsp = section[1].trim() === 'dsp';
+      continue;
+    }
+    if (!inDsp) continue;
+    const match = line.match(/^bandwidth_hz\s*=\s*([+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?)$/);
+    if (match) return Number(match[1]);
+  }
+  return null;
+}
+
+function initializeBandControls(bandwidthHz) {
+  if (!(bandwidthHz > 0)) return;
+  configuredBandwidthHz = bandwidthHz;
+  bandMinHz = -bandwidthHz / 2;
+  bandMaxHz = bandwidthHz / 2;
+  bandMinInput.min = String(bandMinHz);
+  bandMinInput.max = String(bandMaxHz);
+  bandMaxInput.min = String(bandMinHz);
+  bandMaxInput.max = String(bandMaxHz);
+  bandMinInput.value = String(bandMinHz);
+  bandMaxInput.value = String(bandMaxHz);
+  updateFrequencyScale();
+}
+
+function ensureBandFromFrame(frame) {
+  if (bandMinHz !== null && bandMaxHz !== null) return;
+  const first = frame.startHz;
+  const last = frame.startHz + frame.stepHz * Math.max(0, frame.bins - 1);
+  const lo = Math.min(first, last);
+  const hi = Math.max(first, last);
+  configuredBandwidthHz = hi - lo;
+  bandMinHz = lo;
+  bandMaxHz = hi;
+  bandMinInput.min = String(lo);
+  bandMinInput.max = String(hi);
+  bandMaxInput.min = String(lo);
+  bandMaxInput.max = String(hi);
+  bandMinInput.value = String(lo);
+  bandMaxInput.value = String(hi);
+  updateFrequencyScale();
+}
+
+function applyBandInputs() {
+  if (!(configuredBandwidthHz > 0)) return;
+  const fullMin = -configuredBandwidthHz / 2;
+  const fullMax = configuredBandwidthHz / 2;
+  let lo = Number(bandMinInput.value);
+  let hi = Number(bandMaxInput.value);
+  if (!Number.isFinite(lo)) lo = bandMinHz;
+  if (!Number.isFinite(hi)) hi = bandMaxHz;
+  lo = Math.max(fullMin, Math.min(fullMax, lo));
+  hi = Math.max(fullMin, Math.min(fullMax, hi));
+  if (lo >= hi) {
+    bandMinInput.value = String(bandMinHz);
+    bandMaxInput.value = String(bandMaxHz);
+    return;
+  }
+  bandMinHz = lo;
+  bandMaxHz = hi;
+  bandMinInput.value = String(lo);
+  bandMaxInput.value = String(hi);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  updateFrequencyScale();
+}
+
+
+function visibleBinRange(frame) {
+  ensureBandFromFrame(frame);
+  const first = frame.startHz;
+  const step = frame.stepHz;
+  if (!Number.isFinite(step) || step === 0) return {first: 0, last: frame.bins - 1};
+  const a = Math.ceil((bandMinHz - first) / step);
+  const b = Math.floor((bandMaxHz - first) / step);
+  return {
+    first: Math.max(0, Math.min(frame.bins - 1, Math.min(a, b))),
+    last: Math.max(0, Math.min(frame.bins - 1, Math.max(a, b)))
+  };
+}
+
 function drawVertical(frame, floor, ceiling) {
+  const range = visibleBinRange(frame);
+  const count = Math.max(1, range.last - range.first + 1);
   ctx.drawImage(canvas, 0, 0, canvas.width, canvas.height-1, 0, 1, canvas.width, canvas.height-1);
   const row = ctx.createImageData(canvas.width, 1);
   for (let x=0; x<canvas.width; x++) {
-    const k = Math.min(frame.bins-1, Math.floor(x * frame.bins / canvas.width));
+    const k = Math.min(range.last, range.first + Math.floor(x * count / canvas.width));
     const p = Math.max(frame.values[k], 1e-30);
     const db = 10 * Math.log10(p);
     const [r,g,b] = palette((db-floor)/(ceiling-floor));
@@ -73,11 +170,13 @@ function drawVertical(frame, floor, ceiling) {
 }
 
 function drawHorizontal(frame, floor, ceiling) {
+  const range = visibleBinRange(frame);
+  const count = Math.max(1, range.last - range.first + 1);
   ctx.drawImage(canvas, 1, 0, canvas.width-1, canvas.height, 0, 0, canvas.width-1, canvas.height);
   const column = ctx.createImageData(1, canvas.height);
   for (let y=0; y<canvas.height; y++) {
     // Frequency runs vertically: highest at the top, lowest at the bottom.
-    const k = Math.max(0, frame.bins-1-Math.floor(y * frame.bins / canvas.height));
+    const k = Math.max(range.first, range.last - Math.floor(y * count / canvas.height));
     const p = Math.max(frame.values[k], 1e-30);
     const db = 10 * Math.log10(p);
     const [r,g,b] = palette((db-floor)/(ceiling-floor));
@@ -88,11 +187,69 @@ function drawHorizontal(frame, floor, ceiling) {
 
 function drawFrame(frame) {
   if (!waterfallRunning) return;
-  const floor = Number(document.getElementById('floor').value);
-  const ceiling = Number(document.getElementById('ceiling').value);
-  if (waterfallOrientation === 'horizontal') drawHorizontal(frame, floor, ceiling);
-  else drawVertical(frame, floor, ceiling);
+  ensureBandFromFrame(frame);
+  if (waterfallOrientation === 'horizontal') drawHorizontal(frame, floorDb, ceilingDb);
+  else drawVertical(frame, floorDb, ceilingDb);
   updateFrameMetrics(frame);
+}
+
+function formatOffset(hz) {
+  if (Math.abs(hz) >= 1e6) return `${(hz / 1e6).toFixed(3)}M`;
+  if (Math.abs(hz) >= 1e3) return `${(hz / 1e3).toFixed(1)}k`;
+  return `${Math.round(hz)}`;
+}
+
+function scaleTickValues(lo, hi) {
+  const values = [];
+  const count = 5;
+  for (let i = 0; i < count; i++) values.push(lo + (hi - lo) * i / (count - 1));
+  if (lo < 0 && hi > 0 && !values.some(v => Math.abs(v) < 1e-9)) {
+    let nearest = 1;
+    for (let i = 2; i < values.length - 1; i++) {
+      if (Math.abs(values[i]) < Math.abs(values[nearest])) nearest = i;
+    }
+    values[nearest] = 0;
+    values.sort((a, b) => a - b);
+  }
+  return values;
+}
+
+function scaleTickMarks(lo, hi) {
+  const majorValues = scaleTickValues(lo, hi);
+  const marks = [];
+  for (let i = 0; i < majorValues.length; i++) {
+    marks.push({value: majorValues[i], kind: 'major'});
+    if (i === majorValues.length - 1) continue;
+    const a = majorValues[i];
+    const b = majorValues[i + 1];
+    for (let subdivision = 1; subdivision < 4; subdivision++) {
+      marks.push({
+        value: a + (b - a) * subdivision / 4,
+        kind: subdivision === 2 ? 'medium' : 'minor',
+      });
+    }
+  }
+  return marks.sort((a, b) => a.value - b.value);
+}
+
+function updateFrequencyScale() {
+  if (bandMinHz === null || bandMaxHz === null || bandMaxHz <= bandMinHz) return;
+  frequencyScale.replaceChildren();
+  const span = bandMaxHz - bandMinHz;
+  for (const mark of scaleTickMarks(bandMinHz, bandMaxHz)) {
+    const tick = document.createElement('span');
+    tick.className = `frequency-tick ${mark.kind}`;
+    if (mark.kind === 'major') tick.textContent = formatOffset(mark.value);
+    const position = (mark.value - bandMinHz) / span * 100;
+    if (waterfallOrientation === 'vertical') {
+      tick.style.left = `${position}%`;
+      if (mark.kind === 'major' && position <= 0.000001) tick.classList.add('edge-start');
+      if (mark.kind === 'major' && position >= 99.999999) tick.classList.add('edge-end');
+    } else {
+      tick.style.top = `${100 - position}%`;
+    }
+    frequencyScale.appendChild(tick);
+  }
 }
 
 function animate() {
@@ -106,7 +263,7 @@ requestAnimationFrame(animate);
 
 function setWaterfallRunning(running) {
   waterfallRunning = running;
-  waterfallToggle.textContent = waterfallRunning ? 'Stop waterfall' : 'Go waterfall';
+  waterfallToggle.textContent = waterfallRunning ? 'Stop' : 'Go';
   waterfallToggle.setAttribute('aria-pressed', waterfallRunning ? 'true' : 'false');
   if (!waterfallRunning) pending.length = 0;
 }
@@ -114,9 +271,12 @@ function setWaterfallRunning(running) {
 function setWaterfallOrientation(orientation) {
   waterfallOrientation = orientation;
   const horizontal = orientation === 'horizontal';
-  orientationButton.textContent = `Waterfall: ${orientation}`;
+  orientationButton.textContent = horizontal ? 'Vertical' : 'Horizontal';
   orientationButton.setAttribute('aria-pressed', horizontal ? 'true' : 'false');
+  waterfallStage.classList.toggle('horizontal', horizontal);
+  waterfallStage.classList.toggle('vertical', !horizontal);
   ctx.clearRect(0, 0, canvas.width, canvas.height);
+  updateFrequencyScale();
 }
 
 waterfallToggle.addEventListener('click', () => {
@@ -127,6 +287,40 @@ waterfallToggle.addEventListener('click', () => {
 orientationButton.addEventListener('click', () => {
   setWaterfallOrientation(waterfallOrientation === 'horizontal' ? 'vertical' : 'horizontal');
 });
+
+function applyLevelInputs() {
+  const floorInput = document.getElementById('floor');
+  const ceilingInput = document.getElementById('ceiling');
+  const nextFloor = Number(floorInput.value);
+  const nextCeiling = Number(ceilingInput.value);
+  if (!Number.isFinite(nextFloor) || !Number.isFinite(nextCeiling) || nextFloor >= nextCeiling) {
+    floorInput.value = String(floorDb);
+    ceilingInput.value = String(ceilingDb);
+    return;
+  }
+  floorDb = nextFloor;
+  ceilingDb = nextCeiling;
+}
+
+for (const input of [document.getElementById('floor'), document.getElementById('ceiling')]) {
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      applyLevelInputs();
+      input.blur();
+    }
+  });
+}
+
+for (const input of [bandMinInput, bandMaxInput]) {
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      applyBandInputs();
+      input.blur();
+    }
+  });
+}
 
 function connectPsd() {
   const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -143,6 +337,10 @@ connectPsd();
 async function refreshConfig() {
   const r = await fetch('/api/config'); const j = await r.json();
   document.getElementById('config').value = j.ok ? j.toml : `ERROR: ${j.error}`;
+  if (j.ok) {
+    const bandwidth = parseConfiguredBandwidth(j.toml);
+    if (bandwidth > 0) initializeBandControls(bandwidth);
+  }
 }
 const liveInputs = {
   centerFrequency: {serverValue: null, dirty: false},
@@ -163,14 +361,17 @@ for (const [id, state] of Object.entries(liveInputs)) {
   const input = document.getElementById(id);
   input.addEventListener('input', () => { state.dirty = true; });
   input.addEventListener('keydown', e => {
-    if (e.key === 'Escape' && state.serverValue !== null) {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      document.querySelector(`button[data-input="${id}"]`)?.click();
+      input.blur();
+    } else if (e.key === 'Escape' && state.serverValue !== null) {
       input.value = state.serverValue;
       state.dirty = false;
       input.blur();
     }
   });
 }
-
 
 let sessionListenIp = '';
 let sessionVersion = '';

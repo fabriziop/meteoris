@@ -259,7 +259,7 @@ Example of a strong meteor scatter. Spectrogram zoomed.
 ![](doc/meteoris_event_20260903142123_zoom.png)
 
 
-# Simulator
+# [Simulator](doc/SIMULATOR.md)
 
 The Meteoris simulator is a SoapySDR-compatible RX driver for detector and
 recorder tests. It generates two independent finite signal classes in
@@ -268,61 +268,11 @@ each configurable period:
 1. a near-zero stationary echo with linear rise, hold and gradual fade;
 2. one spectrally clean descending linear chirp at a separate time.
 
-Noise, amplitudes, timing, stationary offset, and chirp endpoints are
-configurable in `[simulator]` inside `config/meteoris_sim.toml`.
+Cycle count, per-cycle amplitude reduction, noise, timing, stationary offset,
+and chirp endpoints are configurable in `[simulator]` inside
+`config/meteoris_sim.toml`.
 
-Typical defaults are:
-
-```toml
-[simulator]
-period_s = 8.0
-noise_amplitude = 5.0
-
-stationary_enabled = true
-stationary_start_s = 0.8
-stationary_rise_s = 0.35
-stationary_hold_s = 1.0
-stationary_fall_s = 0.65
-stationary_offset_hz = 0
-stationary_amplitude = 3.0
-
-chirp_enabled = true
-chirp_start_s = 4.0
-chirp_duration_s = 1.2
-chirp_start_offset_hz = 38000
-chirp_end_offset_hz = 12000
-chirp_amplitude = 6.0
-```
-
-With the normal `shift_hz = -1000000`, the stationary offset and chirp offsets
-appear directly on the final Meteoris PSD frequency axis. Stochastic CS8
-rounding is retained to suppress coherent quantization/intermodulation replicas.
-
-The simulator is built as a SoapySDR plugin. During development, run it with:
-
-```bash
-./run_sim.sh
-```
-
-This forces SoapySDR to use the freshly built plugin from this repository, so
-an older installed `meteoris_sim` module cannot silently mask simulator source
-changes. Normal `install.sh --local` / `--system` now installs the simulator
-plugin too; use `--no-sim` to exclude it.
-
-Select it with:
-
-```toml
-[sdr]
-driver = "meteoris_sim"
-```
-
-At startup the plugin logs `Meteoris simulator finite-events-2` together with
-the effective stationary/chirp timing and amplitudes. If that line is absent,
-the process is not using this simulator build.
-
-The simulated meteor-scatter sequence contains one stationary-frequency event
-at `f = 0` and one chirp event with a rapidly decreasing Doppler frequency,
-representing a meteor undergoing strong deceleration.
+See [SIMULATOR.md](doc/SIMULATOR.md) for all details.
 
 # References and Internals
 

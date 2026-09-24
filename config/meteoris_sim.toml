@@ -18,6 +18,14 @@ gain = 20
 # The complete synthetic pattern repeats every this many seconds.
 period_s = 8.0
 
+# Number of periods that contain signals. 0 repeats indefinitely. After the
+# last cycle the source continues producing background noise only.
+cycle_count = 3
+
+# Absolute amount subtracted from both signal amplitudes after every cycle.
+# Cycle 1 uses the amplitudes below; amplitudes are clamped at zero.
+amplitude_reduction = 1.0
+
 # Approximate complex-noise amplitude in native CS8 counts at gain=20 dB.
 noise_amplitude = 5.0
 

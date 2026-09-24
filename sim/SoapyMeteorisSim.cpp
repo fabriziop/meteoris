@@ -5,6 +5,8 @@
 #include <SoapySDR/Logger.hpp>
 #include <SoapySDR/Version.hpp>
 
+#include "signal_cycle.hpp"
+
 #include <algorithm>
 #include <atomic>
 #include <chrono>
@@ -22,7 +24,7 @@
 namespace
 {
 constexpr double PI = 3.141592653589793238462643383279502884;
-constexpr const char *METEORIS_SIM_VERSION = "finite-events-2";
+constexpr const char *METEORIS_SIM_VERSION = "finite-cycles-3";
 
 struct SimStream
 {
@@ -48,6 +50,8 @@ public:
     explicit MeteorisSim(const SoapySDR::Kwargs &args)
     {
         _eventPeriod = argDouble(args, "period_s", _eventPeriod);
+        _cycleCount = argUint64(args, "cycle_count", _cycleCount);
+        _amplitudeReduction = argDouble(args, "amplitude_reduction", _amplitudeReduction);
         _noiseAmp = argDouble(args, "noise_amplitude", _noiseAmp);
         _stationaryEnabled = argBool(args, "stationary_enabled", _stationaryEnabled);
         _stationaryStart = argDouble(args, "stationary_start_s", _stationaryStart);
@@ -68,6 +72,8 @@ public:
         std::ostringstream msg;
         msg << "Meteoris simulator " << METEORIS_SIM_VERSION
             << ": period=" << _eventPeriod << "s"
+            << " cycles=" << (_cycleCount == 0 ? "unlimited" : std::to_string(_cycleCount))
+            << " amplitude_reduction=" << _amplitudeReduction
             << " noise_amp=" << _noiseAmp
             << " stationary=" << (_stationaryEnabled ? "on" : "off")
             << " start=" << _stationaryStart << "s"
@@ -316,6 +322,15 @@ private:
         return it == args.end() ? fallback : std::stod(it->second);
     }
 
+    static uint64_t argUint64(const SoapySDR::Kwargs &args, const std::string &key, const uint64_t fallback)
+    {
+        const auto it = args.find(key);
+        if (it == args.end()) return fallback;
+        if (!it->second.empty() && it->second.front() == '-')
+            throw std::runtime_error(key + " must be >= 0");
+        return std::stoull(it->second);
+    }
+
     static bool argBool(const SoapySDR::Kwargs &args, const std::string &key, const bool fallback)
     {
         const auto it = args.find(key);
@@ -328,7 +343,8 @@ private:
     void validateSignalConfig() const
     {
         if (!(_eventPeriod > 0.0)) throw std::runtime_error("period_s must be > 0");
-        if (_noiseAmp < 0.0 || _stationaryAmp < 0.0 || _chirpAmp < 0.0)
+        if (_noiseAmp < 0.0 || _stationaryAmp < 0.0 || _chirpAmp < 0.0 ||
+            _amplitudeReduction < 0.0)
             throw std::runtime_error("simulator amplitudes must be >= 0");
         if (_stationaryStart < 0.0 || _stationaryRise < 0.0 ||
             _stationaryHold < 0.0 || _stationaryFall < 0.0)
@@ -381,8 +397,6 @@ private:
         // to the configured amplitudes below. Stochastic CS8 quantization is
         // retained to avoid coherent intermodulation replicas.
         const double gainScale = std::pow(10.0, (_gainDb - 20.0) / 20.0);
-        const double stationaryAmp = _stationaryAmp * gainScale;
-        const double chirpAmp = _chirpAmp * gainScale;
         const double noiseAmp = _noiseAmp * gainScale;
 
         const double stationaryHz = translatedCenterHz + _stationaryOffsetHz;
@@ -394,12 +408,18 @@ private:
             const uint64_t absolute = s.sampleIndex + n;
             const double t = double(absolute) / _sampleRate;
             const double ep = std::fmod(t, _eventPeriod);
+            const uint64_t cycle = static_cast<uint64_t>(std::floor(t / _eventPeriod));
+            const bool cycleActive = meteoris::sim::cycleGeneratesSignals(cycle, _cycleCount);
+            const double stationaryAmp =
+                meteoris::sim::cycleAmplitude(_stationaryAmp, _amplitudeReduction, cycle) * gainScale;
+            const double chirpAmp =
+                meteoris::sim::cycleAmplitude(_chirpAmp, _amplitudeReduction, cycle) * gainScale;
             std::complex<double> v(0.0, 0.0);
 
             // Finite near-zero stationary echo: linear attack, flat hold and
             // linear decay. The oscillator continues through the period so no
             // phase discontinuity is introduced at the envelope boundaries.
-            if (_stationaryEnabled)
+            if (cycleActive && _stationaryEnabled)
             {
                 const double stationaryEnd = _stationaryStart + _stationaryRise +
                     _stationaryHold + _stationaryFall;
@@ -416,7 +436,7 @@ private:
             }
             s.stationary *= stationaryStep;
 
-            const bool chirpActive = _chirpEnabled &&
+            const bool chirpActive = cycleActive && _chirpEnabled &&
                 ep >= _chirpStart && ep < (_chirpStart + _chirpDuration);
             if (chirpActive)
             {
@@ -480,6 +500,8 @@ private:
     double _gainDb = 20.0;
 
     double _eventPeriod = 8.0;
+    uint64_t _cycleCount = 0;
+    double _amplitudeReduction = 0.0;
     double _noiseAmp = 5.0;
     bool _stationaryEnabled = true;
     double _stationaryStart = 0.8;

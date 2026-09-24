@@ -259,6 +259,8 @@ chirp inside `period_s`.
 ```toml
 [simulator]
 period_s = 8.0
+cycle_count = 3
+amplitude_reduction = 1.0
 noise_amplitude = 5.0
 stationary_enabled = true
 stationary_start_s = 0.8
@@ -281,6 +283,13 @@ at the same offsets in the final PSD. Stationary rise/hold/fall durations are
 independent. The chirp is linear in frequency versus time. All event times must
 fit inside `period_s`. Amplitudes are approximately native CS8-count amplitudes
 at receiver gain 20 dB and scale with the simulated gain setting.
+
+`cycle_count` is the number of periods that generate stationary/chirp signals;
+`0` keeps repeating indefinitely. Cycle 1 uses the configured amplitudes. Each
+later cycle subtracts `amplitude_reduction` from both signal amplitudes once per
+completed cycle, clamping each result at zero. After the last configured cycle,
+only `noise_amplitude` remains. The reduction must be non-negative and never
+changes the noise level.
 
 # `[dsp]` — frequency translation and decimation
 

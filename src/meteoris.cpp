@@ -181,6 +181,8 @@ struct Config
     // by real SDR drivers. The simulator generates two independent finite
     // events per period: a near-zero stationary echo and a linear chirp.
     double simulatorPeriodSeconds = 8.0;
+    uint64_t simulatorCycleCount = 0; // 0 = unlimited
+    double simulatorAmplitudeReduction = 0.0;
     double simulatorNoiseAmplitude = 5.0;
     bool simulatorStationaryEnabled = true;
     double simulatorStationaryStartSeconds = 0.8;
@@ -2299,6 +2301,8 @@ std::string effectiveToml(const Config &c)
     {
         o << "\n[simulator]\n"
           << "period_s = " << c.simulatorPeriodSeconds << "\n"
+          << "cycle_count = " << c.simulatorCycleCount << "\n"
+          << "amplitude_reduction = " << c.simulatorAmplitudeReduction << "\n"
           << "noise_amplitude = " << c.simulatorNoiseAmplitude << "\n"
           << "stationary_enabled = " << (c.simulatorStationaryEnabled ? "true" : "false") << "\n"
           << "stationary_start_s = " << c.simulatorStationaryStartSeconds << "\n"
@@ -2451,6 +2455,13 @@ void applyTomlValue(Config &c, const std::string &key, const std::string &raw)
     else if (key == "sdr.center_frequency") c.centerFrequency = std::stod(v);
     else if (key == "sdr.gain") c.gain = std::stod(v);
     else if (key == "simulator.period_s") c.simulatorPeriodSeconds = std::stod(v);
+    else if (key == "simulator.cycle_count")
+    {
+        if (!v.empty() && v.front() == '-')
+            throw std::runtime_error("simulator.cycle_count must be >= 0");
+        c.simulatorCycleCount = std::stoull(v);
+    }
+    else if (key == "simulator.amplitude_reduction") c.simulatorAmplitudeReduction = std::stod(v);
     else if (key == "simulator.noise_amplitude") c.simulatorNoiseAmplitude = std::stod(v);
     else if (key == "simulator.stationary_enabled") c.simulatorStationaryEnabled = parseBool(v);
     else if (key == "simulator.stationary_start_s") c.simulatorStationaryStartSeconds = std::stod(v);
@@ -2758,6 +2769,8 @@ SoapySDR::Device *getDevice(const Config &cfg)
     if (cfg.driver == "meteoris_sim")
     {
         args["period_s"] = std::to_string(cfg.simulatorPeriodSeconds);
+        args["cycle_count"] = std::to_string(cfg.simulatorCycleCount);
+        args["amplitude_reduction"] = std::to_string(cfg.simulatorAmplitudeReduction);
         args["noise_amplitude"] = std::to_string(cfg.simulatorNoiseAmplitude);
         args["stationary_enabled"] = cfg.simulatorStationaryEnabled ? "true" : "false";
         args["stationary_start_s"] = std::to_string(cfg.simulatorStationaryStartSeconds);
@@ -2955,6 +2968,7 @@ Config parseArgs(const int argc, char **argv)
         if (!(c.simulatorPeriodSeconds > 0.0))
             throw std::runtime_error("simulator.period_s must be > 0");
         if (c.simulatorNoiseAmplitude < 0.0 || c.simulatorStationaryAmplitude < 0.0 ||
+            c.simulatorAmplitudeReduction < 0.0 ||
             c.simulatorChirpAmplitude < 0.0)
             throw std::runtime_error("simulator amplitudes must be >= 0");
         if (c.simulatorStationaryStartSeconds < 0.0 ||

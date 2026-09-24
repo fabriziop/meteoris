@@ -88,6 +88,18 @@ class MeteorisWebFrontendTest(unittest.TestCase):
         self.assertIn("if (!waterfallRunning) return;", app)
         self.assertIn("waterfallRunning = !waterfallRunning;", app)
 
+    def test_waterfall_sound_is_muted_by_default_and_limited_to_5khz(self) -> None:
+        html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
+        app = (ROOT / "web" / "app.js").read_text(encoding="utf-8")
+        self.assertIn('id="waterfallSound"', html)
+        self.assertIn('aria-pressed="false"', html)
+        self.assertIn('>Sound</button>', html)
+        self.assertIn("const AUDIO_MAX_HZ = 5000;", app)
+        self.assertIn("let audioEnabled = false;", app)
+        self.assertIn("function updatePsdAudio(frame)", app)
+        self.assertIn("waterfallSound.textContent = audioEnabled ? 'Mute' : 'Sound';", app)
+        self.assertIn("updatePsdAudio(f);", app)
+
 
     def test_waterfall_controls_are_below_canvas_and_labels_are_compact(self) -> None:
         html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")

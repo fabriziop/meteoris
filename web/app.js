@@ -4,6 +4,7 @@ const waterfallStage = document.getElementById('waterfallStage');
 const frequencyScale = document.getElementById('frequencyScale');
 const orientationButton = document.getElementById('waterfallOrientation');
 const waterfallToggle = document.getElementById('waterfallToggle');
+const waterfallSound = document.getElementById('waterfallSound');
 const bandMinInput = document.getElementById('bandMin');
 const bandMaxInput = document.getElementById('bandMax');
 let pending = [];
@@ -15,6 +16,86 @@ let bandMinHz = null;
 let bandMaxHz = null;
 let floorDb = -130;
 let ceilingDb = -60;
+
+// A PSD has power but no phase, so receiver audio cannot be reconstructed.
+// Instead, sonify the visible spectrum with one oscillator per frequency band.
+// The selected RF-offset range is mapped linearly onto 80 Hz .. 5 kHz.
+const AUDIO_BANDS = 48;
+const AUDIO_MIN_HZ = 80;
+const AUDIO_MAX_HZ = 5000;
+let audioContext = null;
+let audioMaster = null;
+let audioVoices = [];
+let audioEnabled = false;
+let lastAudioUpdateMs = 0;
+
+function createAudioGraph() {
+  if (audioContext) return;
+  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+  if (!AudioContextClass) throw new Error('Web Audio is not supported by this browser');
+  audioContext = new AudioContextClass();
+  audioMaster = audioContext.createGain();
+  audioMaster.gain.setValueAtTime(0, audioContext.currentTime);
+  audioMaster.connect(audioContext.destination);
+  audioVoices = [];
+  for (let i = 0; i < AUDIO_BANDS; i++) {
+    const oscillator = audioContext.createOscillator();
+    const gain = audioContext.createGain();
+    const position = AUDIO_BANDS === 1 ? 0 : i / (AUDIO_BANDS - 1);
+    oscillator.frequency.value = AUDIO_MIN_HZ + position * (AUDIO_MAX_HZ - AUDIO_MIN_HZ);
+    gain.gain.value = 0;
+    oscillator.connect(gain);
+    gain.connect(audioMaster);
+    oscillator.start();
+    audioVoices.push({oscillator, gain});
+  }
+}
+
+async function setAudioEnabled(enabled) {
+  if (enabled) {
+    createAudioGraph();
+    await audioContext.resume();
+    audioEnabled = true;
+    audioMaster.gain.cancelScheduledValues(audioContext.currentTime);
+    audioMaster.gain.setTargetAtTime(0.22, audioContext.currentTime, 0.03);
+  } else {
+    audioEnabled = false;
+    if (audioContext) {
+      audioMaster.gain.cancelScheduledValues(audioContext.currentTime);
+      audioMaster.gain.setTargetAtTime(0, audioContext.currentTime, 0.02);
+      window.setTimeout(() => {
+        if (!audioEnabled && audioContext?.state === 'running') audioContext.suspend();
+      }, 120);
+    }
+  }
+  waterfallSound.textContent = audioEnabled ? 'Mute' : 'Sound';
+  waterfallSound.setAttribute('aria-pressed', audioEnabled ? 'true' : 'false');
+}
+
+function updatePsdAudio(frame) {
+  if (!audioEnabled || !audioContext || audioContext.state !== 'running') return;
+  const nowMs = performance.now();
+  if (nowMs - lastAudioUpdateMs < 30) return;
+  lastAudioUpdateMs = nowMs;
+  const range = visibleBinRange(frame);
+  const binCount = Math.max(1, range.last - range.first + 1);
+  const now = audioContext.currentTime;
+  for (let band = 0; band < AUDIO_BANDS; band++) {
+    const first = range.first + Math.floor(band * binCount / AUDIO_BANDS);
+    const last = Math.min(range.last,
+      range.first + Math.floor((band + 1) * binCount / AUDIO_BANDS) - 1);
+    let power = 0;
+    let samples = 0;
+    for (let k = first; k <= Math.max(first, last); k++) {
+      power += Math.max(frame.values[k], 1e-30);
+      samples++;
+    }
+    const db = 10 * Math.log10(power / Math.max(1, samples));
+    const level = Math.max(0, Math.min(1, (db - floorDb) / (ceilingDb - floorDb)));
+    const amplitude = level * level / AUDIO_BANDS;
+    audioVoices[band].gain.gain.setTargetAtTime(amplitude, now, 0.025);
+  }
+}
 
 function palette(t) {
   // Match meteoris_plot.gqrx_colormap(): classic 256-entry Gqrx-like palette.
@@ -288,6 +369,17 @@ orientationButton.addEventListener('click', () => {
   setWaterfallOrientation(waterfallOrientation === 'horizontal' ? 'vertical' : 'horizontal');
 });
 
+waterfallSound.addEventListener('click', async () => {
+  try {
+    await setAudioEnabled(!audioEnabled);
+  } catch (err) {
+    audioEnabled = false;
+    waterfallSound.textContent = 'Unavailable';
+    waterfallSound.disabled = true;
+    waterfallSound.title = err.message;
+  }
+});
+
 function applyLevelInputs() {
   const floorInput = document.getElementById('floor');
   const ceilingInput = document.getElementById('ceiling');
@@ -328,6 +420,7 @@ function connectPsd() {
   ws.binaryType = 'arraybuffer';
   ws.onmessage = e => {
     const f = parseFrame(e.data); if (!f) return;
+    updatePsdAudio(f);
     pending.push(f); if (pending.length > 32) pending.splice(0, pending.length-32);
   };
   ws.onclose = () => { setTimeout(connectPsd, 1000); };

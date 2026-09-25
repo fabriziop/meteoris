@@ -16,6 +16,11 @@ void validateEchoesAutomaticConfig(const Config &, const Environment &);
 Requirements echoesAutomaticRequirements(const Config &);
 std::unique_ptr<IDetector> makeEchoesAutomaticDetector(const Config &, const Environment &);
 
+std::vector<ConfigField> meteorLogger3fSchema();
+void validateMeteorLogger3fConfig(const Config &, const Environment &);
+Requirements meteorLogger3fRequirements(const Config &, const Environment &);
+std::unique_ptr<IDetector> makeMeteorLogger3fDetector(const Config &, const Environment &);
+
 namespace {
 std::string trim(const std::string &s)
 {
@@ -85,13 +90,14 @@ double Config::doubleValue(const std::string &key, double defaultValue) const
 
 std::vector<std::string> pluginNames()
 {
-    return {"peak_tracker", "echoes_automatic"};
+    return {"peak_tracker", "echoes_automatic", "meteor_logger_3f"};
 }
 
 std::vector<ConfigField> schema(const std::string &plugin)
 {
     if (plugin == "peak_tracker") return peakTrackerSchema();
     if (plugin == "echoes_automatic") return echoesAutomaticSchema();
+    if (plugin == "meteor_logger_3f") return meteorLogger3fSchema();
     throw std::runtime_error("unknown detector plugin: " + plugin);
 }
 
@@ -119,6 +125,8 @@ void validate(const Selection &selection, const Environment &environment)
         return validatePeakTrackerConfig(selection.config, environment);
     if (selection.plugin == "echoes_automatic")
         return validateEchoesAutomaticConfig(selection.config, environment);
+    if (selection.plugin == "meteor_logger_3f")
+        return validateMeteorLogger3fConfig(selection.config, environment);
     throw std::runtime_error("unknown detector plugin: " + selection.plugin);
 }
 
@@ -127,6 +135,8 @@ Requirements requirements(const Selection &selection, const Environment &environ
     validate(selection, environment);
     if (selection.plugin == "echoes_automatic")
         return echoesAutomaticRequirements(selection.config);
+    if (selection.plugin == "meteor_logger_3f")
+        return meteorLogger3fRequirements(selection.config, environment);
     return Requirements();
 }
 
@@ -138,6 +148,8 @@ std::unique_ptr<IDetector> create(const Selection &selection,
         return makePeakTrackerDetector(selection.config, environment);
     if (selection.plugin == "echoes_automatic")
         return makeEchoesAutomaticDetector(selection.config, environment);
+    if (selection.plugin == "meteor_logger_3f")
+        return makeMeteorLogger3fDetector(selection.config, environment);
     throw std::runtime_error("unknown detector plugin: " + selection.plugin);
 }
 

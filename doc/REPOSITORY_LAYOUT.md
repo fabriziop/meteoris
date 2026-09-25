@@ -22,6 +22,7 @@ meteoris/
 │   │   ├── detector.hpp
 │   │   ├── detector_registry.cpp
 │   │   ├── echoes_automatic_detector.cpp
+│   │   ├── meteor_logger_3f_detector.cpp
 │   │   └── peak_tracker_detector.cpp
 │   ├── dsp/
 │   │   ├── simd_dot.hpp          # SIMD dispatch interface
@@ -51,6 +52,7 @@ meteoris/
 │   └── style.css                 # Browser interface styling
 ├── tests/
 │   ├── echoes_automatic_detector_test.cpp
+│   ├── meteor_logger_3f_detector_test.cpp
 │   ├── simd_runtime_dispatch_test.py
 │   ├── windows_port_structure_test.py
 │   ├── build_install_workflow_test.py

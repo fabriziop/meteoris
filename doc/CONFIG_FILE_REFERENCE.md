@@ -1151,6 +1151,7 @@ Available plugins are:
 ```toml
 plugin = "peak_tracker"
 plugin = "echoes_automatic"
+plugin = "meteor_logger_3f"
 ```
 
 Changing this parameter is the application-level detector replacement
@@ -1174,6 +1175,8 @@ code.
 See [`DETECTOR_PLUGIN_API.md`](DETECTOR_PLUGIN_API.md).
 See [`ECHOES_AUTOMATIC_DETECTOR.md`](ECHOES_AUTOMATIC_DETECTOR.md) for the
 Echoes-style threshold detector and its `[detector.echoes]` parameters.
+See [`METEOR_LOGGER_3F_DETECTOR.md`](METEOR_LOGGER_3F_DETECTOR.md) for the
+signature-based detector and its `[detector.meteor_logger]` parameters.
 
 ## `enabled`
 

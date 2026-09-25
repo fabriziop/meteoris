@@ -176,6 +176,7 @@ add_executable(meteoris
     src/dsp/simd_dot.cpp
     src/detector/detector_registry.cpp
     src/detector/echoes_automatic_detector.cpp
+    src/detector/meteor_logger_3f_detector.cpp
     src/detector/peak_tracker_detector.cpp
     src/fft/fft_backend.cpp
     src/network/network_server.cpp

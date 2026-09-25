@@ -87,6 +87,17 @@ EXPLANATION_OVERRIDES = {
     "detector.echoes.automatic_baseline_time_constant_s": "Time constant used to adapt the automatic idle baseline.",
     "detector.echoes.automatic_stddev_window_s": "Window duration used for automatic-mode standard-deviation estimation.",
     "detector.echoes.automatic_end_stddev_factor": "Standard-deviation multiplier used by the automatic event-end condition.",
+    "detector.meteor_logger.detection_min_hz": "Lowest signed PSD offset searched by the Meteor Logger 3f detector.",
+    "detector.meteor_logger.detection_max_hz": "Highest signed PSD offset searched by the Meteor Logger 3f detector.",
+    "detector.meteor_logger.cluster_width_hz": "Maximum span of the three strongest PSD frequencies, in Hz.",
+    "detector.meteor_logger.sequence_frames": "Confirmation length in PSD frames; use 5 for sensitive or 6 for robust mode.",
+    "detector.meteor_logger.allowed_gaps": "Maximum missing clustered frames in one 3f confirmation sequence.",
+    "detector.meteor_logger.max_drift_hz_s": "Maximum peak-frequency drift accepted by the 3f sequence, in Hz/s.",
+    "detector.meteor_logger.release_s": "Time without a compatible 3f peak before the event becomes inactive.",
+    "detector.meteor_logger.auto_notch_enabled": "Learn and reject persistent clustered interference lines.",
+    "detector.meteor_logger.auto_notch_after_s": "Persistence time before learning an automatic interference notch.",
+    "detector.meteor_logger.auto_notch_width_hz": "Frequency width excluded around each learned interference line.",
+    "detector.meteor_logger.max_auto_notches": "Maximum learned interference notches retained until restart.",
     "output.file_prefix": "Prefix used when naming daily Meteoris HDF5 files.",
 }
 

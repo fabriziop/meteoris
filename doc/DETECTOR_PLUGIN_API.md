@@ -28,6 +28,7 @@ src/
     detector_registry.cpp
     peak_tracker_detector.cpp
     echoes_automatic_detector.cpp
+    meteor_logger_3f_detector.cpp
 ```
 
 `meteoris.cpp` no longer contains detector-specific configuration structs, defaults,
@@ -232,6 +233,7 @@ Currently the registered implementations are:
 ```text
 peak_tracker
 echoes_automatic
+meteor_logger_3f
 ```
 
 Adding a second detector requires:

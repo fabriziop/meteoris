@@ -106,7 +106,7 @@ segment_count = 0
 
 [detector]
 # Compile-time registered detector implementation selected at runtime.
-# Available plugins: "peak_tracker", "echoes_automatic".
+# Available plugins: "peak_tracker", "echoes_automatic", "meteor_logger_3f".
 plugin = "peak_tracker"
 # 0 lets a future plugin choose automatically. The current peak_tracker is
 # synchronous/serial but the interface already carries this resource budget.
@@ -208,6 +208,23 @@ delay_before_trigger_s = 0
 # duration, joining briefly interrupted illumination into one event.
 join_events_closer_than_s = 1
 
+[detector.meteor_logger]
+# Used when detector.plugin = "meteor_logger_3f". The three strongest PSD
+# frequencies must cluster, then persist as a frequency-continuous sequence.
+detection_min_hz = -49000
+detection_max_hz = 49000
+cluster_width_hz = 250
+# Paper modes: 5 = sensitive, 6 = robust. One missing frame is allowed.
+sequence_frames = 6
+allowed_gaps = 1
+max_drift_hz_s = 11000
+release_s = 0.15
+# Learn a persistent clustered line as interference and exclude its band.
+auto_notch_enabled = true
+auto_notch_after_s = 10
+auto_notch_width_hz = 200
+max_auto_notches = 4
+
 [output]
 # One HDF5 file is created/appended per UTC day.
 directory = "./data"
@@ -236,4 +253,3 @@ max_growth_mb_per_min = 100
 # Stop Meteoris when available space on the output filesystem falls below this value.
 # 0 disables the free-space safety check.
 min_free_space_gb = 2
-

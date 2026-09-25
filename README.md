@@ -373,11 +373,12 @@ plugin = "peak_tracker"
 threads = 1
 ```
 
-Available detector plugins are `peak_tracker` and `echoes_automatic`. Their
-implementations live in `src/detector/peak_tracker_detector.cpp` and
-`src/detector/echoes_automatic_detector.cpp`. Structured metrics and detector
-objects cross the interface for logging and future HDF5/plot/replay tools. See
-[`doc/DETECTOR_PLUGIN_API.md`](doc/DETECTOR_PLUGIN_API.md).
+Available detector plugins are `peak_tracker`, `echoes_automatic`, and
+`meteor_logger_3f`. Their implementations live in separate files under
+`src/detector/`. Structured metrics and detector objects cross the interface
+for logging and future HDF5/plot/replay tools. See
+[`doc/DETECTOR_PLUGIN_API.md`](doc/DETECTOR_PLUGIN_API.md) and
+[`doc/METEOR_LOGGER_3F_DETECTOR.md`](doc/METEOR_LOGGER_3F_DETECTOR.md).
 
 
 ### Recording modes

@@ -183,10 +183,21 @@ class MeteorisWebFrontendTest(unittest.TestCase):
         self.assertNotIn("bandMinInput.addEventListener('change'", app)
         self.assertNotIn("bandMaxInput.addEventListener('change'", app)
         self.assertIn("function applyLevelInputs()", app)
+        self.assertIn("function commitNumberInput(input, apply)", app)
+        commit = app[app.index("function commitNumberInput(input, apply)"):]
+        commit = commit[:commit.index("\n}")]
+        self.assertLess(commit.index("input.blur();"), commit.index("window.requestAnimationFrame(apply);"))
         self.assertIn("if (e.key === 'Enter')", app)
-        self.assertIn("applyLevelInputs();", app)
-        self.assertIn("applyBandInputs();", app)
+        self.assertIn("commitNumberInput(input, applyLevelInputs);", app)
+        self.assertIn("commitNumberInput(input, applyBandInputs);", app)
+        self.assertIn("commitNumberInput(input, () => {", app)
         self.assertIn("document.querySelector(`button[data-input=\"${id}\"]`)?.click();", app)
+
+    def test_numeric_spinner_takes_keyboard_focus(self) -> None:
+        app = (ROOT / "web" / "app.js").read_text(encoding="utf-8")
+        self.assertIn("document.querySelectorAll('input[type=\"number\"]')", app)
+        self.assertIn("input.addEventListener('pointerdown', () => {", app)
+        self.assertIn("input.focus({preventScroll: true});", app)
 
     def test_web_assets_disable_browser_cache(self) -> None:
         gateway = (ROOT / "web" / "meteoris_web.py").read_text(encoding="utf-8")

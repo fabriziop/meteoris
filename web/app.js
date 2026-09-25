@@ -412,12 +412,28 @@ function applyLevelInputs() {
   ceilingDb = nextCeiling;
 }
 
+function commitNumberInput(input, apply) {
+  // A number input's spinner can still have a pending native edit while the
+  // Enter keydown handler runs. Blurring commits that edit; waiting one frame
+  // then makes sure apply() reads the value displayed by the control.
+  input.blur();
+  window.requestAnimationFrame(apply);
+}
+
+// Some browsers leave focus on the previously clicked button when the native
+// stepper arrows of an input[type=number] are used. Make the number input the
+// keyboard target explicitly so Enter reaches its commit handler.
+for (const input of document.querySelectorAll('input[type="number"]')) {
+  input.addEventListener('pointerdown', () => {
+    input.focus({preventScroll: true});
+  });
+}
+
 for (const input of [document.getElementById('floor'), document.getElementById('ceiling')]) {
   input.addEventListener('keydown', e => {
     if (e.key === 'Enter') {
       e.preventDefault();
-      applyLevelInputs();
-      input.blur();
+      commitNumberInput(input, applyLevelInputs);
     }
   });
 }
@@ -426,8 +442,7 @@ for (const input of [bandMinInput, bandMaxInput]) {
   input.addEventListener('keydown', e => {
     if (e.key === 'Enter') {
       e.preventDefault();
-      applyBandInputs();
-      input.blur();
+      commitNumberInput(input, applyBandInputs);
     }
   });
 }
@@ -474,8 +489,9 @@ for (const [id, state] of Object.entries(liveInputs)) {
   input.addEventListener('keydown', e => {
     if (e.key === 'Enter') {
       e.preventDefault();
-      document.querySelector(`button[data-input="${id}"]`)?.click();
-      input.blur();
+      commitNumberInput(input, () => {
+        document.querySelector(`button[data-input="${id}"]`)?.click();
+      });
     } else if (e.key === 'Escape' && state.serverValue !== null) {
       input.value = state.serverValue;
       state.dirty = false;

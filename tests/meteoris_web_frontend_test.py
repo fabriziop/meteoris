@@ -149,6 +149,18 @@ class MeteorisWebFrontendTest(unittest.TestCase):
         self.assertIn('.spectrum-controls input[type="number"] { width:118px;', css)
         self.assertIn("border-color:#4a4a4a", css)
 
+    def test_all_waterfall_controls_scroll_when_the_row_does_not_fit(self) -> None:
+        css = (ROOT / "web" / "style.css").read_text(encoding="utf-8")
+        controls = css[css.index(".spectrum-controls {"):css.index(".spectrum-controls .toolbar-actions,")]
+        self.assertIn("min-width:0", controls)
+        self.assertIn("max-width:100%", controls)
+        self.assertIn("flex-wrap:nowrap", controls)
+        self.assertIn("overflow-x:auto", controls)
+        self.assertIn("overflow-y:hidden", controls)
+        self.assertIn("-webkit-overflow-scrolling:touch", controls)
+        self.assertIn(".spectrum-controls .toolbar-actions {\n  flex:0 0 auto;", css)
+        self.assertIn(".spectrum-controls .range { flex:0 0 auto; }", css)
+
 
     def test_vertical_scale_ticks_share_canvas_side_and_endpoint_labels_stay_inside(self) -> None:
         css = (ROOT / "web" / "style.css").read_text(encoding="utf-8")

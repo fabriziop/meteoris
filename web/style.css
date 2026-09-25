@@ -99,12 +99,19 @@ canvas {
 .waterfall-stage.horizontal .frequency-tick.major::before { width:9px; }
 .spectrum-controls {
   flex:0 0 auto;
+  min-width:0;
+  max-width:100%;
   margin-top:8px;
   display:flex;
   align-items:flex-end;
   gap:12px;
   flex-wrap:nowrap;
   white-space:nowrap;
+  overflow-x:auto;
+  overflow-y:hidden;
+  overscroll-behavior-inline:contain;
+  -webkit-overflow-scrolling:touch;
+  padding-bottom:3px;
 }
 .spectrum-controls .toolbar-actions,
 .spectrum-controls .range {
@@ -114,6 +121,10 @@ canvas {
   margin:0;
   flex-wrap:nowrap;
 }
+.spectrum-controls .toolbar-actions {
+  flex:0 0 auto;
+}
+.spectrum-controls .range { flex:0 0 auto; }
 .spectrum-controls label { margin:0; min-width:0; }
 .spectrum-controls button { width:172px; }
 .spectrum-controls button.sound-toggle { width:92px; }

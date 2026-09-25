@@ -116,8 +116,9 @@ canvas {
 }
 .spectrum-controls label { margin:0; min-width:0; }
 .spectrum-controls button { width:172px; }
+.spectrum-controls button.sound-toggle { width:92px; }
 .spectrum-controls input[type="number"] { width:118px; box-sizing:border-box; }
-.orientation-toggle,.toggle-button { flex:0 0 auto; white-space:nowrap; }
+.orientation-toggle,.toggle-button,.sound-toggle { flex:0 0 auto; white-space:nowrap; }
 aside { min-height:0; display:flex; flex-direction:column; gap:12px; }
 aside .panel:last-child { min-height:0; flex:1 1 auto; display:flex; flex-direction:column; }
 label { display:flex; flex-direction:column; gap:4px; margin:8px 0; }

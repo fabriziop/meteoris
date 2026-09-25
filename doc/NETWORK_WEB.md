@@ -150,5 +150,15 @@ DSP PSD TCP traffic. The browser maintains a bounded queue and renders on
 frames/s) is independent of display refresh cadence. With a browser connected,
 all PSD frames are still forwarded; there is no implicit decimation.
 
-The initial web UI provides a live waterfall, center-frequency/gain status and
+The web UI provides a live waterfall, center-frequency/gain status and
 controls, network status, dB display range, and the complete effective TOML.
+
+The waterfall toolbar also has a `Sound` / `Mute` button. Audio is muted by
+default and starts only after the user presses `Sound`, as required by browser
+autoplay policies. Because the network stream contains PSD power rather than
+time-domain samples or phase, this is spectrum sonification rather than
+reconstructed receiver audio. The currently visible waterfall band is divided
+into 48 bands and mapped linearly to 80 Hz--5 kHz. A median-noise gate suppresses
+the idle spectrum, while narrow PSD peaks become tones according to their power
+above that noise floor. Changing the visible frequency limits changes the
+RF-offset range being heard. Press `Mute` to suspend browser audio processing.

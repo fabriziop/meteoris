@@ -47,7 +47,8 @@ Without AI, this project probably would not exist.
     Echoes-style automatic threshold detection.
   * Efficient HDF5 storage format for meteor-event data.
   * Interactive configuration wizard `meteoris_config`.
-  * Live `meteoris_web` browser waterfall and TCP control gateway.
+  * Live `meteoris_web` browser waterfall with optional 5 kHz PSD sonification
+    and TCP control gateway.
   * Conservative `meteoris_recover_hdf5` helper for files left uncleanly closed.
   * Event-list display with details for each event.
   * Interactive event display with a time/frequency waterfall, an optional

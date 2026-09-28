@@ -14,10 +14,34 @@ endif()
 
 find_package(SoapySDR CONFIG REQUIRED)
 
+# The simulator shares the same declarative configuration schema as the main app.
+# When built standalone, reproduce the top-level generated-header target.
+if(NOT TARGET meteoris_config_schema)
+    find_package(Python3 REQUIRED COMPONENTS Interpreter)
+    set(METEORIS_CONFIG_SCHEMA "${CMAKE_CURRENT_LIST_DIR}/../conf/parameters.toml")
+    set(METEORIS_CONFIG_HEADER "${CMAKE_BINARY_DIR}/generated/config_schema.hpp")
+    add_custom_command(
+        OUTPUT "${METEORIS_CONFIG_HEADER}"
+        COMMAND "${Python3_EXECUTABLE}"
+                "${CMAKE_CURRENT_LIST_DIR}/../conf/generate_config.py"
+                "${METEORIS_CONFIG_SCHEMA}"
+                "${METEORIS_CONFIG_HEADER}"
+        DEPENDS
+            "${METEORIS_CONFIG_SCHEMA}"
+            "${CMAKE_CURRENT_LIST_DIR}/../conf/generate_config.py"
+        COMMENT "Generating C++ configuration schema"
+        VERBATIM
+    )
+    add_custom_target(meteoris_config_schema DEPENDS "${METEORIS_CONFIG_HEADER}")
+endif()
+
 SOAPY_SDR_MODULE_UTIL(
     TARGET meteorisSim
     SOURCES SoapyMeteorisSim.cpp
 )
+
+add_dependencies(meteorisSim meteoris_config_schema)
+target_include_directories(meteorisSim PRIVATE "${CMAKE_BINARY_DIR}/generated")
 
 # Keep the freshly built plugin in a predictable directory. run_sim.sh uses
 # this path so simulator tests cannot silently pick up an older installed

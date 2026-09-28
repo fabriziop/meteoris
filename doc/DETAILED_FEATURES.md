@@ -106,7 +106,7 @@ Here is a concise list of the main **Meteoris** features as developed so far:
   * Separate sections for `[sdr]`, `[dsp]`, `[psd]`, `[runtime]`, `[agc]`,
     `[detector]`, and `[output]`.
   * CLI options override TOML.
-  * Sensible built-in defaults when `meteoris.toml` is absent.
+  * Schema defaults from `conf/parameters.toml` when `meteoris.toml` is absent.
   * Detector enabled by default.
   * Default output directory is `./data`, created automatically.
 

@@ -106,6 +106,23 @@ if(HDF5_VERSION VERSION_LESS "1.10")
     message(FATAL_ERROR "Meteoris SWMR support requires HDF5 >= 1.10")
 endif()
 find_package(Threads REQUIRED)
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
+
+set(METEORIS_CONFIG_SCHEMA "${CMAKE_SOURCE_DIR}/conf/parameters.toml")
+set(METEORIS_CONFIG_HEADER "${CMAKE_BINARY_DIR}/generated/config_schema.hpp")
+add_custom_command(
+    OUTPUT "${METEORIS_CONFIG_HEADER}"
+    COMMAND "${Python3_EXECUTABLE}"
+            "${CMAKE_SOURCE_DIR}/conf/generate_config.py"
+            "${METEORIS_CONFIG_SCHEMA}"
+            "${METEORIS_CONFIG_HEADER}"
+    DEPENDS
+        "${METEORIS_CONFIG_SCHEMA}"
+        "${CMAKE_SOURCE_DIR}/conf/generate_config.py"
+    COMMENT "Generating C++ configuration schema"
+    VERBATIM
+)
+add_custom_target(meteoris_config_schema DEPENDS "${METEORIS_CONFIG_HEADER}")
 
 # spdlog can be consumed either through its CMake package or directly from an
 # installed header tree.  The header-only path is particularly useful on
@@ -172,6 +189,7 @@ if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|amd64|AMD64|i.86|x86|X86)$" OR
 endif()
 
 add_executable(meteoris
+    "${METEORIS_CONFIG_HEADER}"
     src/meteoris.cpp
     src/dsp/simd_dot.cpp
     src/detector/detector_registry.cpp
@@ -200,6 +218,8 @@ if(METEORIS_X86_TARGET AND METEORIS_X86_AVX2)
 elseif(METEORIS_X86_TARGET)
     message(STATUS "x86/x64 SIMD: AVX2 kernel disabled; scalar baseline only")
 endif()
+
+add_dependencies(meteoris meteoris_config_schema)
 
 target_include_directories(meteoris PRIVATE
     src
@@ -372,15 +392,17 @@ install(TARGETS meteoris
 # These are examples/templates. User-edited runtime configuration should
 # normally live beside the application or in a site-specific config dir.
 install(FILES
-    config/meteoris.toml
-    config/meteoris_sim.toml
+    conf/README.md
+    conf/parameters.toml
+    conf/meteoris.toml
+    conf/meteoris_sim.toml
     DESTINATION ${CMAKE_INSTALL_DATADIR}/meteoris
     COMPONENT meteoris_runtime
 )
 
 if(METEORIS_INSTALL_PLOT)
     install(FILES
-        config/meteoris_plot.toml
+        conf/meteoris_plot.toml
         DESTINATION ${CMAKE_INSTALL_DATADIR}/meteoris
         COMPONENT meteoris_runtime
     )

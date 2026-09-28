@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Interactive Meteoris TOML configuration wizard.
 
-The canonical config/meteoris.toml file defines parameter order, compiled-style
+The canonical conf/meteoris.toml file defines parameter order, compiled-style
 sample values and explanatory comments.  An existing configuration, when
 present, supplies the proposed values while missing parameters fall back to the
 canonical template.
@@ -152,8 +152,8 @@ def _nested_set(data: dict[str, Any], dotted: str, value: Any) -> None:
 
 
 def _canonical_path() -> Path:
-    # Source-tree use: tools/../config/meteoris.toml
-    source = Path(__file__).resolve().parent.parent / "config" / "meteoris.toml"
+    # Source-tree use: tools/../conf/meteoris.toml
+    source = Path(__file__).resolve().parent.parent / "conf" / "meteoris.toml"
     if source.is_file():
         return source
 
@@ -168,7 +168,7 @@ def _canonical_path() -> Path:
         if candidate.is_file():
             return candidate
     raise FileNotFoundError(
-        "cannot locate canonical config/meteoris.toml; run from the source tree "
+        "cannot locate canonical conf/meteoris.toml; run from the source tree "
         "or install the Meteoris configuration templates"
     )
 

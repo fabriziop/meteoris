@@ -1,4 +1,5 @@
 #include "detector.hpp"
+#include "config_schema.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -13,21 +14,21 @@ namespace {
 
 struct EchoesAutomaticConfig
 {
-    std::string thresholdMode = "automatic";
-    double detectionCenterHz = 0.0;
-    double detectionWidthHz = 0.0;
-    double absoluteLowerDbHz = -90.0;
-    double absoluteUpperDbHz = -85.0;
-    double differentialLowerDb = 4.0;
-    double differentialUpperDb = 7.0;
-    double automaticLowerOffsetDb = 4.0;
-    double automaticUpperDeltaDb = 3.0;
-    double automaticWarmupSeconds = 5.0;
-    double automaticBaselineTimeConstantSeconds = 30.0;
-    double automaticStddevWindowSeconds = 1.0;
-    double automaticEndStddevFactor = 2.0;
-    double delayBeforeTriggerSeconds = 0.0;
-    double joinEventsSeconds = 1.0;
+    std::string thresholdMode = meteoris_config_schema::default_detector_echoes_threshold_mode();
+    double detectionCenterHz = meteoris_config_schema::default_detector_echoes_detection_center_hz();
+    double detectionWidthHz = meteoris_config_schema::default_detector_echoes_detection_width_hz();
+    double absoluteLowerDbHz = meteoris_config_schema::default_detector_echoes_absolute_lower_db_hz();
+    double absoluteUpperDbHz = meteoris_config_schema::default_detector_echoes_absolute_upper_db_hz();
+    double differentialLowerDb = meteoris_config_schema::default_detector_echoes_differential_lower_db();
+    double differentialUpperDb = meteoris_config_schema::default_detector_echoes_differential_upper_db();
+    double automaticLowerOffsetDb = meteoris_config_schema::default_detector_echoes_automatic_lower_offset_db();
+    double automaticUpperDeltaDb = meteoris_config_schema::default_detector_echoes_automatic_upper_delta_db();
+    double automaticWarmupSeconds = meteoris_config_schema::default_detector_echoes_automatic_warmup_s();
+    double automaticBaselineTimeConstantSeconds = meteoris_config_schema::default_detector_echoes_automatic_baseline_time_constant_s();
+    double automaticStddevWindowSeconds = meteoris_config_schema::default_detector_echoes_automatic_stddev_window_s();
+    double automaticEndStddevFactor = meteoris_config_schema::default_detector_echoes_automatic_end_stddev_factor();
+    double delayBeforeTriggerSeconds = meteoris_config_schema::default_detector_echoes_delay_before_trigger_s();
+    double joinEventsSeconds = meteoris_config_schema::default_detector_echoes_join_events_closer_than_s();
 };
 
 EchoesAutomaticConfig parseEchoesConfig(const Config &c)
@@ -424,42 +425,16 @@ private:
 
 } // namespace
 
-std::vector<ConfigField> echoesAutomaticSchema()
-{
-    return {
-        {"echoes.threshold_mode", "\"automatic\"", "absolute, differential, or automatic"},
-        {"echoes.detection_center_hz", "0.0", "Detection interval center frequency"},
-        {"echoes.detection_width_hz", "0.0", "Detection interval width; <=0 means full PSD band"},
-        {"echoes.absolute_lower_db_hz", "-90.0", "Absolute lower threshold"},
-        {"echoes.absolute_upper_db_hz", "-85.0", "Absolute upper threshold"},
-        {"echoes.differential_lower_db", "4.0", "Differential lower threshold"},
-        {"echoes.differential_upper_db", "7.0", "Differential upper threshold"},
-        {"echoes.automatic_lower_offset_db", "4.0", "Automatic lower-threshold offset"},
-        {"echoes.automatic_upper_delta_db", "3.0", "Automatic upper-threshold delta"},
-        {"echoes.automatic_warmup_s", "5.0", "Automatic baseline warmup"},
-        {"echoes.automatic_baseline_time_constant_s", "30.0", "Automatic baseline time constant"},
-        {"echoes.automatic_stddev_window_s", "1.0", "Automatic signal standard-deviation window"},
-        {"echoes.automatic_end_stddev_factor", "2.0", "Automatic event-end standard-deviation factor"},
-        {"echoes.delay_before_trigger_s", "0.0", "Delay before reporting a trigger"},
-        {"echoes.join_events_closer_than_s", "1.0", "Join events separated by less than this interval"}
-    };
-}
-
 void validateEchoesAutomaticConfig(const Config &config, const Environment &environment)
 {
     const EchoesAutomaticConfig c = parseEchoesConfig(config);
-    const bool modeValid = c.thresholdMode == "absolute" || c.thresholdMode == "differential" || c.thresholdMode == "automatic";
-    if (!modeValid) throw std::runtime_error("detector.echoes.threshold_mode must be absolute, differential, or automatic");
     const double loBand = environment.frequencyStartHz;
-    const double hiBand = environment.frequencyStartHz + environment.frequencyStepHz * double(environment.bins ? environment.bins - 1 : 0);
-    if (c.detectionWidthHz < 0.0 || (c.detectionWidthHz > 0.0 &&
-        (c.detectionCenterHz - 0.5*c.detectionWidthHz < loBand || c.detectionCenterHz + 0.5*c.detectionWidthHz > hiBand)))
+    const double hiBand = environment.frequencyStartHz +
+        environment.frequencyStepHz * double(environment.bins ? environment.bins - 1 : 0);
+    if (c.detectionWidthHz > 0.0 &&
+        (c.detectionCenterHz - 0.5 * c.detectionWidthHz < loBand ||
+         c.detectionCenterHz + 0.5 * c.detectionWidthHz > hiBand))
         throw std::runtime_error("detector.echoes detection interval must lie inside detector PSD band");
-    if (!(c.absoluteLowerDbHz < c.absoluteUpperDbHz) || !(c.differentialLowerDb < c.differentialUpperDb) ||
-        c.automaticLowerOffsetDb < 0.0 || !(c.automaticUpperDeltaDb > 0.0) || c.automaticWarmupSeconds < 0.0 ||
-        !(c.automaticBaselineTimeConstantSeconds > 0.0) || !(c.automaticStddevWindowSeconds > 0.0) ||
-        !(c.automaticEndStddevFactor > 0.0) || c.delayBeforeTriggerSeconds < 0.0 || c.joinEventsSeconds < 0.0)
-        throw std::runtime_error("invalid detector.echoes threshold or timing parameters");
 }
 
 Requirements echoesAutomaticRequirements(const Config &config)

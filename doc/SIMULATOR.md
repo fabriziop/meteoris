@@ -71,25 +71,25 @@ representing a meteor undergoing strong deceleration.
 
 # References and Internals
 
-[Configuration File Reference](./doc/CONFIG_FILE_REFERENCE.md)
+[Configuration File Reference](CONFIG_FILE_REFERENCE.md)
 
-[Detailed Features](./doc/DETAILED_FEATURES.md)
+[Detailed Features](DETAILED_FEATURES.md)
 
-[Detection Algorithm](./doc/DETECTOR.md)
+[Detection Algorithm](DETECTOR.md)
 Note: the detector algorithm is still under development and may require
 further tuning to reduce false triggers caused by noise.
 
-[Echoes-style Automatic Detector](./doc/ECHOES_AUTOMATIC_DETECTOR.md)
+[Echoes-style Automatic Detector](ECHOES_AUTOMATIC_DETECTOR.md)
 
-[DSP Pipeline](./doc/DSP_PIPELINE.md)
+[DSP Pipeline](DSP_PIPELINE.md)
 
-[HDF5 Recording Format](./doc/RECORDING_FORMAT.md)
+[HDF5 Recording Format](RECORDING_FORMAT.md)
 
-[Recover HDF5 Output Files](./doc/RECOVER_HDF5.md)
+[Recover HDF5 Output Files](RECOVER_HDF5.md)
 
-[BUG20260902: one-PSD spectrogram dropout after trigger ON](./doc/BUG20260902.md)
+[BUG20260902: one-PSD spectrogram dropout after trigger ON](BUG20260902.md)
 
-**Live browser/network architecture:** see [NETWORK_WEB.md](doc/NETWORK_WEB.md).
+**Live browser/network architecture:** see [NETWORK_WEB.md](NETWORK_WEB.md).
 
 ### Notes
 
@@ -171,7 +171,7 @@ Available detector plugins are `peak_tracker`, `echoes_automatic`, and
 `meteor_logger_3f`. Their implementations live in separate files under
 `src/detector/`. Structured metrics and detector objects cross the interface
 for logging and future HDF5/plot/replay tools. See
-[`doc/DETECTOR_PLUGIN_API.md`](doc/DETECTOR_PLUGIN_API.md).
+[`doc/DETECTOR_PLUGIN_API.md`](DETECTOR_PLUGIN_API.md).
 
 
 ### Recording modes

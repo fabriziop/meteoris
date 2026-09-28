@@ -110,10 +110,29 @@ followed by its value (for example, `parameter1 = 100`).
 
 See [SET_CONFIG.md](doc/SET_CONFIG.md) for configuration details.
 
+### Configuration source of truth
+
+For the C++ recorder and simulator, `conf/parameters.toml` is the single source
+of truth for parameter types, fallback defaults, scalar ranges/choices, short
+descriptions, and declarative cross-parameter constraints. CMake generates the
+C++ configuration metadata from this file; defaults and static schema tables
+should not be duplicated in C++.
+
+`conf/meteoris.toml` and `conf/meteoris_sim.toml` are commented reference
+profiles containing explicit operating values. They may intentionally differ
+from schema defaults. Effective values are resolved in this order:
+
+```text
+parameters.toml defaults < TOML file < command-line overrides
+```
+
+See [`doc/CONFIG_ARCHITECTURE.md`](doc/CONFIG_ARCHITECTURE.md) for the full
+architecture and [`conf/README.md`](conf/README.md) for schema maintenance rules.
+
 # Run the Recorder
 
 To run the Meteoris recorder, choose a working directory, copy the example
-configuration file (`config/meteoris.toml`) there, adjust it as described
+configuration file (`conf/meteoris.toml`) there, adjust it as described
 above, and then launch the recorder. If Meteoris is installed system-wide,
 simply run:
 
@@ -160,7 +179,7 @@ manual procedure, validation steps, and stop conditions.
 
 The Meteoris display program is normally run from the same working directory as
 the recorder. Copy the example plotting configuration
-(`config/meteoris_plot.toml`) there and run:
+(`conf/meteoris_plot.toml`) there and run:
 
 ```
 meteoris_plot data/meteoris_YYYYMMDD.h5
@@ -271,7 +290,7 @@ each configurable period:
 
 Cycle count, per-cycle amplitude reduction, noise, timing, stationary offset,
 and chirp endpoints are configurable in `[simulator]` inside
-`config/meteoris_sim.toml`.
+`conf/meteoris_sim.toml`.
 
 See [SIMULATOR.md](doc/SIMULATOR.md) for all details.
 

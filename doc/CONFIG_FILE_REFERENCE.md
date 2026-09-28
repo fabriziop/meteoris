@@ -5,10 +5,10 @@
 The installed `meteoris_config` command is an interactive front-end for this
 configuration. It reads `./meteoris.toml` when present (or an explicitly named
 TOML), proposes those values as defaults, and fills missing values from the
-canonical `config/meteoris.toml`. `smart` mode asks only essential settings;
+reference `conf/meteoris.toml` profile. `smart` mode asks only essential settings;
 `expert` asks every setting. Each prompt and generated comment carries a stable
 `section.parameter` number based on the input file order, with missing settings
-appended in canonical order. The default output is `meteoris.toml.new`.
+appended in reference-profile order. The default output is `meteoris.toml.new`.
 
 ```bash
 meteoris_config
@@ -23,16 +23,19 @@ Meteoris reads configuration values from TOML sections and then applies any
 command-line overrides. The precedence is:
 
 ```text
-compiled defaults < meteoris.toml < command-line options
+conf/parameters.toml schema defaults < meteoris.toml < command-line options
 ```
 
 If no explicit `--config` option is supplied, Meteoris looks for
 `./meteoris.toml` in the current working directory. Unknown TOML keys are
 treated as configuration errors rather than silently ignored.
 
-The examples and values shown below correspond to the current reference
-`config/meteoris.toml`. They are example operating values, not necessarily the
-only valid settings.
+The parameter fallback defaults, types, ranges, choices, and declarative
+cross-parameter constraints are defined in `conf/parameters.toml`. The values
+shown below correspond to the current reference `conf/meteoris.toml`; they are
+a human-editable operating profile and may intentionally differ from schema
+defaults. See [CONFIG_ARCHITECTURE.md](CONFIG_ARCHITECTURE.md) for the schema,
+generation, validation, and maintenance model.
 
 ---
 
@@ -1342,7 +1345,7 @@ Directory in which HDF5 files are stored.
 
 Meteoris creates the directory hierarchy automatically when needed.
 
-The current compiled default is also:
+The current schema default in `conf/parameters.toml` is also:
 
 ```text
 ./data

@@ -1,4 +1,5 @@
 #include "detector.hpp"
+#include "config_schema.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -16,17 +17,17 @@ constexpr double MIN_POWER = 1e-30;
 
 struct MeteorLogger3fConfig
 {
-    double detectionMinHz = -49000.0;
-    double detectionMaxHz = 49000.0;
-    double clusterWidthHz = 250.0;
-    size_t sequenceFrames = 6;
-    size_t allowedGaps = 1;
-    double maxDriftHzS = 11000.0;
-    double releaseSeconds = 0.15;
-    bool autoNotchEnabled = true;
-    double autoNotchAfterSeconds = 10.0;
-    double autoNotchWidthHz = 200.0;
-    size_t maxAutoNotches = 4;
+    double detectionMinHz = meteoris_config_schema::default_detector_meteor_logger_detection_min_hz();
+    double detectionMaxHz = meteoris_config_schema::default_detector_meteor_logger_detection_max_hz();
+    double clusterWidthHz = meteoris_config_schema::default_detector_meteor_logger_cluster_width_hz();
+    size_t sequenceFrames = static_cast<size_t>(meteoris_config_schema::default_detector_meteor_logger_sequence_frames());
+    size_t allowedGaps = static_cast<size_t>(meteoris_config_schema::default_detector_meteor_logger_allowed_gaps());
+    double maxDriftHzS = meteoris_config_schema::default_detector_meteor_logger_max_drift_hz_s();
+    double releaseSeconds = meteoris_config_schema::default_detector_meteor_logger_release_s();
+    bool autoNotchEnabled = meteoris_config_schema::default_detector_meteor_logger_auto_notch_enabled();
+    double autoNotchAfterSeconds = meteoris_config_schema::default_detector_meteor_logger_auto_notch_after_s();
+    double autoNotchWidthHz = meteoris_config_schema::default_detector_meteor_logger_auto_notch_width_hz();
+    size_t maxAutoNotches = static_cast<size_t>(meteoris_config_schema::default_detector_meteor_logger_max_auto_notches());
 };
 
 MeteorLogger3fConfig parseConfig(const Config &c)
@@ -442,23 +443,6 @@ private:
 
 } // namespace
 
-std::vector<ConfigField> meteorLogger3fSchema()
-{
-    return {
-        {"meteor_logger.detection_min_hz", "-49000.0", "3f search lower frequency"},
-        {"meteor_logger.detection_max_hz", "49000.0", "3f search upper frequency"},
-        {"meteor_logger.cluster_width_hz", "250.0", "Maximum span of the three strongest frequencies"},
-        {"meteor_logger.sequence_frames", "6", "Frames in the temporal confirmation sequence"},
-        {"meteor_logger.allowed_gaps", "1", "Missing clustered frames allowed per sequence"},
-        {"meteor_logger.max_drift_hz_s", "11000.0", "Maximum peak-frequency drift rate"},
-        {"meteor_logger.release_s", "0.15", "No-compatible-peak event release time"},
-        {"meteor_logger.auto_notch_enabled", "true", "Learn and reject persistent interference lines"},
-        {"meteor_logger.auto_notch_after_s", "10.0", "Persistence before learning an interference notch"},
-        {"meteor_logger.auto_notch_width_hz", "200.0", "Learned interference notch width"},
-        {"meteor_logger.max_auto_notches", "4", "Maximum learned interference notches"}
-    };
-}
-
 void validateMeteorLogger3fConfig(const Config &config, const Environment &environment)
 {
     const MeteorLogger3fConfig c = parseConfig(config);
@@ -467,18 +451,8 @@ void validateMeteorLogger3fConfig(const Config &config, const Environment &envir
         throw std::runtime_error("meteor_logger_3f requires valid PSD geometry");
     const double bandLo = environment.frequencyStartHz;
     const double bandHi = bandLo + environment.frequencyStepHz * double(environment.bins - 1);
-    if (!(c.detectionMinHz < c.detectionMaxHz) ||
-        c.detectionMinHz < bandLo || c.detectionMaxHz > bandHi)
+    if (c.detectionMinHz < bandLo || c.detectionMaxHz > bandHi)
         throw std::runtime_error("detector.meteor_logger detection interval must lie inside detector PSD band");
-    if (!(c.clusterWidthHz > 0.0))
-        throw std::runtime_error("detector.meteor_logger.cluster_width_hz must be > 0");
-    if (c.sequenceFrames < 2 || c.allowedGaps >= c.sequenceFrames)
-        throw std::runtime_error("detector.meteor_logger requires sequence_frames >= 2 and allowed_gaps < sequence_frames");
-    if (!(c.maxDriftHzS > 0.0) || c.releaseSeconds < 0.0)
-        throw std::runtime_error("invalid detector.meteor_logger drift or release setting");
-    if (c.autoNotchEnabled && (!(c.autoNotchAfterSeconds > 0.0) ||
-        !(c.autoNotchWidthHz > 0.0) || c.maxAutoNotches == 0))
-        throw std::runtime_error("invalid detector.meteor_logger auto-notch setting");
 }
 
 Requirements meteorLogger3fRequirements(const Config &config,

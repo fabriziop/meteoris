@@ -546,7 +546,7 @@ If Meteoris was launched with a configuration file, the stored data represent
 the configuration text used by the application.
 
 If no external configuration file was supplied, Meteoris can store a generated
-effective TOML configuration based on compiled/default/current values.
+effective TOML configuration based on schema-default and current effective values.
 
 The dataset is a one-dimensional character array whose length equals the
 number of bytes/characters written.

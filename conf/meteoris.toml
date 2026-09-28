@@ -80,7 +80,6 @@ max_gain_db = -1
 # Maximum gain change per AGC update.
 max_step_db = 1.0
 
-
 [network]
 # Browser gateway interface. The sockets listen when enabled, but Meteoris only
 # queues/transmits PSD frames while meteoris_web has an active PSD connection.

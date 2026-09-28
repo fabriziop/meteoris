@@ -84,6 +84,7 @@
 #include "dsp/simd_dot.hpp"
 #include "fft/fft_backend.hpp"
 #include "version.hpp"
+#include "config_schema.hpp"
 
 #include <limits>
 
@@ -94,11 +95,6 @@ constexpr const char *METEORIS_HDF5_FORMAT = "meteoris v0";
 constexpr const char *METEORIS_HDF5_AUTHOR = "Fabrizio Pollastri";
 
 constexpr double PI = 3.141592653589793238462643383279502884;
-constexpr double DEFAULT_INPUT_RATE = 10e6;
-constexpr size_t DEFAULT_DECIM_1 = 8;
-constexpr size_t DEFAULT_DECIM_2 = 5;
-constexpr double DEFAULT_BANDWIDTH = 100e3;
-constexpr double DEFAULT_ATTENUATION_DB = 60.0;
 
 volatile std::sig_atomic_t gStopRequested = 0;
 volatile std::sig_atomic_t gStopSignal = 0;
@@ -150,101 +146,101 @@ spdlog::level::level_enum parseLogLevel(const std::string &value)
 
 struct Config
 {
-    std::string driver = "hackrf-htime";
-    double sampleRate = DEFAULT_INPUT_RATE;
-    double centerFrequency = 0.0;
-    double gain = -1.0;
-    double runSeconds = 0.0; // 0 = run until SIGINT/SIGTERM
-    double shiftHz = 1e6;
-    size_t decim1 = DEFAULT_DECIM_1;
-    size_t decim2 = DEFAULT_DECIM_2;
-    double bandwidth = DEFAULT_BANDWIDTH;
-    double attenuationDb = DEFAULT_ATTENUATION_DB;
-    size_t nfft = 4096;
-    size_t streamBuffers = 16;
-    bool direct = true;
-    size_t fir1Threads = 1; // 1 or 2; FIR1 block kernel workers
-    bool daemonMode = false;
-    std::string logLevel = "info";
-    bool logColor = true;
+    std::string driver = meteoris_config_schema::default_sdr_driver();
+    double sampleRate = meteoris_config_schema::default_sdr_sample_rate();
+    double centerFrequency = meteoris_config_schema::default_sdr_center_frequency();
+    double gain = meteoris_config_schema::default_sdr_gain();
+    double runSeconds = meteoris_config_schema::default_runtime_run_seconds(); // 0 = run until SIGINT/SIGTERM
+    double shiftHz = meteoris_config_schema::default_dsp_shift_hz();
+    size_t decim1 = static_cast<size_t>(meteoris_config_schema::default_dsp_decimation_stage1());
+    size_t decim2 = static_cast<size_t>(meteoris_config_schema::default_dsp_decimation_stage2());
+    double bandwidth = meteoris_config_schema::default_dsp_bandwidth_hz();
+    double attenuationDb = meteoris_config_schema::default_dsp_attenuation_db();
+    size_t nfft = static_cast<size_t>(meteoris_config_schema::default_psd_fft_size());
+    size_t streamBuffers = static_cast<size_t>(meteoris_config_schema::default_runtime_stream_buffers());
+    bool direct = meteoris_config_schema::default_runtime_direct_buffer();
+    size_t fir1Threads = static_cast<size_t>(meteoris_config_schema::default_runtime_fir1_threads()); // 1 or 2; FIR1 block kernel workers
+    bool daemonMode = meteoris_config_schema::default_runtime_daemon();
+    std::string logLevel = meteoris_config_schema::default_logging_level();
+    bool logColor = meteoris_config_schema::default_logging_color();
     // File logging is enabled by default in foreground and daemon mode.
     // The path is relative to the process launch directory unless absolute.
-    bool logFileEnabled = true;
-    std::string logFile = "meteoris.log";
-    bool logFileTruncate = false;
+    bool logFileEnabled = meteoris_config_schema::default_logging_file_enabled();
+    std::string logFile = meteoris_config_schema::default_logging_file();
+    bool logFileTruncate = meteoris_config_schema::default_logging_file_truncate();
     // Daily text-log rotation boundary, minutes after 00:00 UTC.
-    bool logDailyRotation = true;
-    int logDailyRotateMinuteUtc = 0;
+    bool logDailyRotation = meteoris_config_schema::default_logging_daily_rotation();
+    int logDailyRotateMinuteUtc = meteoris_config_schema::defaultHhMmMinutes("logging.daily_rotate_time");
     std::string configPath;
 
     // Optional parameters for the meteoris_sim Soapy driver. They are ignored
     // by real SDR drivers. The simulator generates two independent finite
     // events per period: a near-zero stationary echo and a linear chirp.
-    double simulatorPeriodSeconds = 8.0;
-    uint64_t simulatorCycleCount = 0; // 0 = unlimited
-    double simulatorAmplitudeReduction = 0.0;
-    double simulatorNoiseAmplitude = 5.0;
-    bool simulatorStationaryEnabled = true;
-    double simulatorStationaryStartSeconds = 0.8;
-    double simulatorStationaryRiseSeconds = 0.35;
-    double simulatorStationaryHoldSeconds = 1.0;
-    double simulatorStationaryFallSeconds = 0.65;
-    double simulatorStationaryOffsetHz = 0.0;
-    double simulatorStationaryAmplitude = 3.0;
-    bool simulatorChirpEnabled = true;
-    double simulatorChirpStartSeconds = 4.0;
-    double simulatorChirpDurationSeconds = 1.2;
-    double simulatorChirpStartOffsetHz = 38e3;
-    double simulatorChirpEndOffsetHz = 12e3;
-    double simulatorChirpAmplitude = 6.0;
+    double simulatorPeriodSeconds = meteoris_config_schema::default_simulator_period_s();
+    uint64_t simulatorCycleCount = static_cast<uint64_t>(meteoris_config_schema::default_simulator_cycle_count()); // 0 = unlimited
+    double simulatorAmplitudeReduction = meteoris_config_schema::default_simulator_amplitude_reduction();
+    double simulatorNoiseAmplitude = meteoris_config_schema::default_simulator_noise_amplitude();
+    bool simulatorStationaryEnabled = meteoris_config_schema::default_simulator_stationary_enabled();
+    double simulatorStationaryStartSeconds = meteoris_config_schema::default_simulator_stationary_start_s();
+    double simulatorStationaryRiseSeconds = meteoris_config_schema::default_simulator_stationary_rise_s();
+    double simulatorStationaryHoldSeconds = meteoris_config_schema::default_simulator_stationary_hold_s();
+    double simulatorStationaryFallSeconds = meteoris_config_schema::default_simulator_stationary_fall_s();
+    double simulatorStationaryOffsetHz = meteoris_config_schema::default_simulator_stationary_offset_hz();
+    double simulatorStationaryAmplitude = meteoris_config_schema::default_simulator_stationary_amplitude();
+    bool simulatorChirpEnabled = meteoris_config_schema::default_simulator_chirp_enabled();
+    double simulatorChirpStartSeconds = meteoris_config_schema::default_simulator_chirp_start_s();
+    double simulatorChirpDurationSeconds = meteoris_config_schema::default_simulator_chirp_duration_s();
+    double simulatorChirpStartOffsetHz = meteoris_config_schema::default_simulator_chirp_start_offset_hz();
+    double simulatorChirpEndOffsetHz = meteoris_config_schema::default_simulator_chirp_end_offset_hz();
+    double simulatorChirpAmplitude = meteoris_config_schema::default_simulator_chirp_amplitude();
 
     // Recording controller mode. "triggered" uses the selected detector;
     // "continuous" records bounded PSD sequences and ignores detector state.
-    std::string recordingMode = "triggered";
-    double recordingSegmentSeconds = 15.0;
-    uint64_t recordingSegmentCount = 0; // 0 = unlimited
+    std::string recordingMode = meteoris_config_schema::default_recording_mode();
+    double recordingSegmentSeconds = meteoris_config_schema::default_recording_segment_seconds();
+    uint64_t recordingSegmentCount = static_cast<uint64_t>(meteoris_config_schema::default_recording_segment_count()); // 0 = unlimited
 
     // Compile-time registered detector plugin selected at runtime.
-    bool detectorEnabled = true;
-    std::string detectorPlugin = "peak_tracker";
+    bool detectorEnabled = meteoris_config_schema::default_detector_enabled();
+    std::string detectorPlugin = meteoris_config_schema::default_detector_plugin();
     // 0 lets the detector choose; phase-1 peak_tracker is currently serial.
-    unsigned detectorThreads = 1;
+    unsigned detectorThreads = static_cast<unsigned>(meteoris_config_schema::default_detector_threads());
 
     // Detector-specific TOML scalars are owned and interpreted by the selected plugin.
     meteoris::detector::Config detectorPluginConfig;
-    double detectorDiagnosticIntervalSeconds = 1.0;
+    double detectorDiagnosticIntervalSeconds = meteoris_config_schema::default_detector_diagnostic_interval_s();
 
     // Recording/event parameters remain common to all active tracks.
-    double detectorPreContextSeconds = 0.5;
-    double detectorPostContextSeconds = 1.0;
+    double detectorPreContextSeconds = meteoris_config_schema::default_detector_pre_context_s();
+    double detectorPostContextSeconds = meteoris_config_schema::default_detector_post_context_s();
     // 0 disables the maximum-duration action. Rearm applies after a discard/cutoff.
-    double detectorMaxEventSeconds = 15.0;
-    double detectorRearmSeconds = 1.0;
-    bool detectorBeepOnRecordedEvent = false;
-    // Keep compiled defaults consistent with config/meteoris.toml so a run
+    double detectorMaxEventSeconds = meteoris_config_schema::default_detector_max_event_seconds();
+    double detectorRearmSeconds = meteoris_config_schema::default_detector_rearm_seconds();
+    bool detectorBeepOnRecordedEvent = meteoris_config_schema::default_detector_beep_on_recorded_event();
+    // Keep compiled defaults consistent with conf/meteoris.toml so a run
     // without a local config writes beneath the working directory, not into it.
-    std::string detectorOutputDirectory = "./data";
-    std::string detectorFilePrefix = "meteoris";
-    int detectorCompression = 1;
+    std::string detectorOutputDirectory = meteoris_config_schema::default_output_directory();
+    std::string detectorFilePrefix = meteoris_config_schema::default_output_file_prefix();
+    int detectorCompression = static_cast<int>(meteoris_config_schema::default_output_hdf5_compression());
     // Enable HDF5 Single-Writer/Multiple-Reader mode for live readers.
-    bool outputSwmr = true;
+    bool outputSwmr = meteoris_config_schema::default_output_swmr();
     // Publish dirty HDF5 data to SWMR readers at this interval. 0 = every append.
-    double outputSwmrFlushSeconds = 1.0;
+    double outputSwmrFlushSeconds = meteoris_config_schema::default_output_swmr_flush_seconds();
     // Daily HDF5 rotation boundary, minutes after 00:00 UTC.
-    int outputDailyRotateMinuteUtc = 0;
+    int outputDailyRotateMinuteUtc = meteoris_config_schema::defaultHhMmMinutes("output.daily_rotate_time");
     // Safety limits for long-running recording. 0 disables the corresponding check.
-    double outputMaxGrowthMbPerMin = 0.0;
-    double outputMinFreeGb = 1.0;
+    double outputMaxGrowthMbPerMin = meteoris_config_schema::default_output_max_growth_mb_per_min();
+    double outputMinFreeGb = meteoris_config_schema::default_output_min_free_space_gb();
 
     // Low-cost ADC-clipping AGC. Saturation is measured directly on native
     // CS8 I/Q samples; PSD bins themselves do not have a universal clip level.
-    bool agcEnabled = false;
-    double agcTargetSaturationPercent = 1.0;
-    double agcTimeConstantSeconds = 2.0;
-    int agcClipLevel = 126;
-    double agcMinGain = -1.0; // <0 means use device range
-    double agcMaxGain = -1.0; // <0 means use device range
-    double agcMaxStepDb = 1.0;
+    bool agcEnabled = meteoris_config_schema::default_agc_enabled();
+    double agcTargetSaturationPercent = meteoris_config_schema::default_agc_target_saturation_percent();
+    double agcTimeConstantSeconds = meteoris_config_schema::default_agc_time_constant_s();
+    int agcClipLevel = static_cast<int>(meteoris_config_schema::default_agc_clip_level());
+    double agcMinGain = meteoris_config_schema::default_agc_min_gain_db(); // <0 means use device range
+    double agcMaxGain = meteoris_config_schema::default_agc_max_gain_db(); // <0 means use device range
+    double agcMaxStepDb = meteoris_config_schema::default_agc_max_step_db();
 
     // Optional meteoris_web TCP interface. Listening sockets exist when enabled,
     // but PSD transmission and control activity start only while meteoris_web
@@ -2450,6 +2446,7 @@ int parseLoggingDailyRotateTime(const std::string &raw)
 void applyTomlValue(Config &c, const std::string &key, const std::string &raw)
 {
     const std::string v = trim(raw);
+    meteoris_config_schema::validateRaw(key, v);
     if (key == "sdr.driver") c.driver = unquote(v);
     else if (key == "sdr.sample_rate") c.sampleRate = std::stod(v);
     else if (key == "sdr.center_frequency") c.centerFrequency = std::stod(v);
@@ -2565,6 +2562,41 @@ void loadToml(Config &c, const std::string &path)
         catch (const std::exception &e)
         { throw std::runtime_error(path + ":" + std::to_string(lineNo) + ": " + e.what()); }
     }
+}
+
+
+void validateEffectiveConfigAgainstSchema(const Config &c)
+{
+    meteoris_config_schema::Values values;
+    std::istringstream input(effectiveToml(c));
+    std::string section, line;
+    size_t lineNo = 0;
+    while (std::getline(input, line))
+    {
+        ++lineNo;
+        bool quoted = false;
+        size_t comment = std::string::npos;
+        for (size_t i = 0; i < line.size(); ++i)
+        {
+            if (line[i] == '"' && (i == 0 || line[i - 1] != '\\')) quoted = !quoted;
+            if (!quoted && line[i] == '#') { comment = i; break; }
+        }
+        if (comment != std::string::npos) line.erase(comment);
+        line = trim(line);
+        if (line.empty()) continue;
+        if (line.front() == '[' && line.back() == ']')
+        {
+            section = trim(line.substr(1, line.size() - 2));
+            continue;
+        }
+        const size_t eq = line.find('=');
+        if (eq == std::string::npos)
+            throw std::runtime_error("generated effective TOML has invalid line " + std::to_string(lineNo));
+        const std::string leaf = trim(line.substr(0, eq));
+        const std::string path = section.empty() ? leaf : section + "." + leaf;
+        values.setRaw(path, trim(line.substr(eq + 1)));
+    }
+    meteoris_config_schema::validateConstraints(values);
 }
 
 void daemonizeProcess()
@@ -2942,75 +2974,21 @@ Config parseArgs(const int argc, char **argv)
         else throw std::runtime_error("unknown argument: " + a);
     }
 
-    if (c.sampleRate <= 0.0 || c.runSeconds < 0.0 || c.streamBuffers == 0 ||
-        c.decim1 == 0 || c.decim2 == 0 || c.bandwidth <= 0.0)
-        throw std::runtime_error("invalid zero/negative configuration value");
-    if (c.nfft == 0 || (c.nfft & (c.nfft - 1)) != 0)
-        throw std::runtime_error("psd.fft_size/--nfft must be a power of two");
-    if (c.fir1Threads != 1 && c.fir1Threads != 2)
-        throw std::runtime_error("runtime.fir1_threads/--fir1-threads must be 1 or 2");
-    (void)parseLogLevel(c.logLevel);
-    const double outputRate = c.sampleRate / double(c.decim1 * c.decim2);
-    if (c.bandwidth >= outputRate)
-        throw std::runtime_error("bandwidth must be smaller than final output sample rate");
-    if (c.agcEnabled)
-    {
-        if (!(c.agcTargetSaturationPercent > 0.0 && c.agcTargetSaturationPercent <= 100.0))
-            throw std::runtime_error("agc.target_saturation_percent must be in (0,100]");
-        if (c.agcTimeConstantSeconds <= 0.0) throw std::runtime_error("agc.time_constant_s must be > 0");
-        if (c.agcClipLevel < 1 || c.agcClipLevel > 128) throw std::runtime_error("agc.clip_level must be in [1,128]");
-        if (c.agcMaxStepDb <= 0.0) throw std::runtime_error("agc.max_step_db must be > 0");
-        if (c.agcMinGain >= 0.0 && c.agcMaxGain >= 0.0 && c.agcMinGain > c.agcMaxGain)
-            throw std::runtime_error("agc.min_gain_db must be <= agc.max_gain_db");
-    }
-    if (c.driver == "meteoris_sim")
-    {
-        if (!(c.simulatorPeriodSeconds > 0.0))
-            throw std::runtime_error("simulator.period_s must be > 0");
-        if (c.simulatorNoiseAmplitude < 0.0 || c.simulatorStationaryAmplitude < 0.0 ||
-            c.simulatorAmplitudeReduction < 0.0 ||
-            c.simulatorChirpAmplitude < 0.0)
-            throw std::runtime_error("simulator amplitudes must be >= 0");
-        if (c.simulatorStationaryStartSeconds < 0.0 ||
-            c.simulatorStationaryRiseSeconds < 0.0 ||
-            c.simulatorStationaryHoldSeconds < 0.0 ||
-            c.simulatorStationaryFallSeconds < 0.0)
-            throw std::runtime_error("simulator stationary timing must be >= 0");
-        const double stationaryEnd = c.simulatorStationaryStartSeconds +
-            c.simulatorStationaryRiseSeconds + c.simulatorStationaryHoldSeconds +
-            c.simulatorStationaryFallSeconds;
-        if (c.simulatorStationaryEnabled && stationaryEnd > c.simulatorPeriodSeconds)
-            throw std::runtime_error("simulator stationary event exceeds period_s");
-        if (c.simulatorChirpStartSeconds < 0.0 || !(c.simulatorChirpDurationSeconds > 0.0))
-            throw std::runtime_error("simulator chirp timing is invalid");
-        if (c.simulatorChirpEnabled &&
-            c.simulatorChirpStartSeconds + c.simulatorChirpDurationSeconds > c.simulatorPeriodSeconds)
-            throw std::runtime_error("simulator chirp event exceeds period_s");
-    }
+    validateEffectiveConfigAgainstSchema(c);
 
-    if (c.recordingMode != "triggered" && c.recordingMode != "continuous")
-        throw std::runtime_error("recording.mode must be triggered or continuous");
-    if (!(c.recordingSegmentSeconds > 0.0))
-        throw std::runtime_error("recording.segment_seconds must be > 0");
-    if (c.recordingMode == "triggered" && !c.detectorEnabled)
-        throw std::runtime_error("recording.mode=triggered requires detector.enabled=true");
+    // Scalar types/ranges/choices and static cross-parameter constraints are
+    // generated from conf/parameters.toml. Keep only behavior-dependent checks
+    // here (detector geometry and detector-requested recorder requirements).
+    (void)parseLogLevel(c.logLevel);
 
     if (c.detectorEnabled)
     {
-        if (c.detectorDiagnosticIntervalSeconds < 0.0)
-            throw std::runtime_error("detector.diagnostic_interval_s must be >= 0");
-        if (c.detectorPreContextSeconds < 0.0 || c.detectorPostContextSeconds < 0.0)
-            throw std::runtime_error("detector pre/post context must be >= 0");
-        if (c.detectorMaxEventSeconds < 0.0)
-            throw std::runtime_error("detector.max_event_seconds must be >= 0");
-        if (c.detectorRearmSeconds < 0.0)
-            throw std::runtime_error("detector.rearm_seconds must be >= 0");
         meteoris::detector::Selection selection;
         selection.plugin = c.detectorPlugin;
         selection.threads = c.detectorThreads;
         selection.config = c.detectorPluginConfig;
 
-        // Configuration-time geometry is sufficient for detector-owned range
+        // Configuration-time geometry is sufficient for detector-owned band
         // validation; the real PSD geometry is validated again at creation.
         meteoris::detector::Environment detectorEnv;
         detectorEnv.bins = 2;
@@ -3026,15 +3004,6 @@ Config parseArgs(const int argc, char **argv)
             throw std::runtime_error(
                 "detector.pre_context_s is smaller than required by detector plugin " +
                 c.detectorPlugin);
-
-        if (c.detectorCompression < 0 || c.detectorCompression > 9)
-            throw std::runtime_error("output.hdf5_compression must be in [0,9]");
-        if (c.outputSwmrFlushSeconds < 0.0)
-            throw std::runtime_error("output.swmr_flush_seconds must be >= 0");
-        if (c.outputMaxGrowthMbPerMin < 0.0)
-            throw std::runtime_error("output.max_growth_mb_per_min must be >= 0");
-        if (c.outputMinFreeGb < 0.0)
-            throw std::runtime_error("output.min_free_space_gb must be >= 0");
     }
     return c;
 }

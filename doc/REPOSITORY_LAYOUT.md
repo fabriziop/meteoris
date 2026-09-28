@@ -61,11 +61,15 @@ meteoris/
 │   ├── meteoris_recover_hdf5_cli_test.py
 │   ├── meteoris_web_frontend_test.py
 │   └── version_consistency_test.py
-├── config/
-│   ├── meteoris.toml
+├── conf/
+│   ├── README.md
+│   ├── parameters.toml           # authoritative C++ configuration schema
+│   ├── generate_config.py        # build-time schema -> C++ generator
+│   ├── meteoris.toml             # receiver reference profile
 │   ├── meteoris_plot.toml
-│   └── meteoris_sim.toml
+│   └── meteoris_sim.toml         # simulator reference profile
 ├── doc/
+│   ├── CONFIG_ARCHITECTURE.md   # generated C++ configuration design
 │   ├── INSTALL.md
 │   ├── NETWORK_WEB.md             # PSD/control TCP and browser gateway architecture
 │   ├── REPOSITORY_LAYOUT.md
@@ -82,6 +86,14 @@ It is not part of an end-user binary installation package.
 Generated build directories, `.pytest_cache/`, Python `__pycache__/` folders,
 `.meteoris-last-build*` state files, and other transient build/runtime files are
 not part of the reference source layout.
+
+`conf/parameters.toml` is the authoritative source for C++ configuration metadata.
+During configuration/build, `conf/generate_config.py` produces
+`generated/config_schema.hpp` inside the build tree. That generated header is
+intentionally absent from the source layout: it is regenerated from the schema and
+must not become a second hand-maintained definition of defaults, ranges, or
+descriptions. The commented `conf/meteoris.toml` and `conf/meteoris_sim.toml` files
+are reference operating profiles, not schema/default definitions.
 
 `VERSION` is the single authoritative package version. CMake derives the
 project version from it, generates the C++ version header, and installs the

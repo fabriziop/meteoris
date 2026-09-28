@@ -152,8 +152,8 @@ Copy the example configurations into the directory from which Meteoris will be
 run:
 
 ```bash
-cp /path/to/meteoris/config/meteoris.toml .
-cp /path/to/meteoris/config/meteoris_plot.toml .
+cp /path/to/meteoris/conf/meteoris.toml .
+cp /path/to/meteoris/conf/meteoris_plot.toml .
 ```
 
 The recorder automatically reads `./meteoris.toml` when present. An explicit
@@ -262,7 +262,7 @@ meteoris --record-mode continuous --record-segment-seconds 15
 Configuration precedence is:
 
 ```text
-defaults < TOML configuration < command-line overrides
+conf/parameters.toml schema defaults < TOML configuration < command-line overrides
 ```
 
 ## 6. Run the simulator
@@ -275,7 +275,7 @@ From the source tree:
 
 This forces SoapySDR to use the freshly built `meteoris_sim` plugin instead of
 an older installed copy. Simulator signal parameters are in
-`config/meteoris_sim.toml`.
+`conf/meteoris_sim.toml`.
 
 ## 7. Display recorded events
 

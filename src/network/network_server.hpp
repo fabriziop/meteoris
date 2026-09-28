@@ -1,6 +1,7 @@
 #pragma once
 
 #include "psd_frame.hpp"
+#include "config_schema.hpp"
 
 #include <atomic>
 #include <condition_variable>
@@ -18,11 +19,11 @@ namespace meteoris_network
 
 struct Config
 {
-    bool enabled = true;
-    std::string bindAddress = "127.0.0.1";
-    uint16_t psdPort = 5510;
-    uint16_t controlPort = 5511;
-    size_t queueFrames = 16;
+    bool enabled = meteoris_config_schema::default_network_enabled();
+    std::string bindAddress = meteoris_config_schema::default_network_bind_address();
+    uint16_t psdPort = static_cast<uint16_t>(meteoris_config_schema::default_network_psd_port());
+    uint16_t controlPort = static_cast<uint16_t>(meteoris_config_schema::default_network_control_port());
+    size_t queueFrames = static_cast<size_t>(meteoris_config_schema::default_network_queue_frames());
 };
 
 struct ControlCommand

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "config_schema.hpp"
+
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -156,9 +158,10 @@ public:
         const ProcessOptions &options = ProcessOptions()) = 0;
 };
 
-// Detector configuration is intentionally schema-driven: Meteoris stores raw
-// TOML scalar values without knowing detector-specific parameter types. Each
-// compile-time plugin owns its schema, defaults, parsing, and validation.
+// Detector configuration is schema-driven: Meteoris stores raw TOML scalar
+// values without knowing detector-specific parameter types. Parameter metadata
+// and defaults are generated from conf/parameters.toml; plugins retain only
+// behavior and geometry-dependent validation.
 struct ConfigField
 {
     ConfigField(const char *k, const char *d, const char *desc)
@@ -185,8 +188,8 @@ private:
 
 struct Selection
 {
-    std::string plugin = "peak_tracker";
-    unsigned threads = 1;
+    std::string plugin = meteoris_config_schema::default_detector_plugin();
+    unsigned threads = static_cast<unsigned>(meteoris_config_schema::default_detector_threads());
     Config config;
 };
 

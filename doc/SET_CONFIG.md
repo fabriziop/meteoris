@@ -76,7 +76,9 @@ shift_hz = +998650
 
 This section defines the parameters of the Meteoris digital signal-processing
 chain. Apart from the **`shift_hz`** parameter discussed above, the supplied
-configuration provides suitable defaults for the other DSP parameters.
+reference profile provides suitable operating values for the other DSP parameters.
+Program fallback defaults and static constraints are defined authoritatively in
+`conf/parameters.toml`; see [CONFIG_ARCHITECTURE.md](CONFIG_ARCHITECTURE.md).
 
 ### The Detector Section Parameters
 
@@ -175,9 +177,9 @@ join_events_closer_than_s = 1
 ```
 
 The detailed detector algorithms and all tuning parameters are documented in
-[`doc/DETECTOR.md`](doc/DETECTOR.md),
-[`doc/ECHOES_AUTOMATIC_DETECTOR.md`](doc/ECHOES_AUTOMATIC_DETECTOR.md), and
-[`doc/CONFIG_FILE_REFERENCE.md`](doc/CONFIG_FILE_REFERENCE.md).
+[`doc/DETECTOR.md`](DETECTOR.md),
+[`doc/ECHOES_AUTOMATIC_DETECTOR.md`](ECHOES_AUTOMATIC_DETECTOR.md), and
+[`doc/CONFIG_FILE_REFERENCE.md`](CONFIG_FILE_REFERENCE.md).
 
 ### The Output Section Parameters
 
@@ -188,7 +190,7 @@ these defaults are suitable, no changes are required.
 ### Parameters in All Other Sections
 
 For a detailed description of every configuration section and parameter, see
-the [Configuration File Reference](./doc/CONFIG_FILE_REFERENCE.md).
+the [Configuration File Reference](CONFIG_FILE_REFERENCE.md).
 
 ---
 

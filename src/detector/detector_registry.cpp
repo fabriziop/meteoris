@@ -1,4 +1,5 @@
 #include "detector.hpp"
+#include "config_schema.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -7,16 +8,13 @@
 namespace meteoris {
 namespace detector {
 
-std::vector<ConfigField> peakTrackerSchema();
 void validatePeakTrackerConfig(const Config &, const Environment &);
 std::unique_ptr<IDetector> makePeakTrackerDetector(const Config &, const Environment &);
 
-std::vector<ConfigField> echoesAutomaticSchema();
 void validateEchoesAutomaticConfig(const Config &, const Environment &);
 Requirements echoesAutomaticRequirements(const Config &);
 std::unique_ptr<IDetector> makeEchoesAutomaticDetector(const Config &, const Environment &);
 
-std::vector<ConfigField> meteorLogger3fSchema();
 void validateMeteorLogger3fConfig(const Config &, const Environment &);
 Requirements meteorLogger3fRequirements(const Config &, const Environment &);
 std::unique_ptr<IDetector> makeMeteorLogger3fDetector(const Config &, const Environment &);
@@ -90,19 +88,50 @@ double Config::doubleValue(const std::string &key, double defaultValue) const
 
 std::vector<std::string> pluginNames()
 {
-    return {"peak_tracker", "echoes_automatic", "meteor_logger_3f"};
+    std::vector<std::string> out;
+    const std::string key("detector.plugin");
+    std::string choices(meteoris_config_schema::parameter(key).choices);
+    std::size_t start = 0;
+    while (start <= choices.size())
+    {
+        const std::size_t end = choices.find('|', start);
+        out.push_back(choices.substr(start,
+            end == std::string::npos ? std::string::npos : end - start));
+        if (end == std::string::npos) break;
+        start = end + 1;
+    }
+    return out;
 }
 
 std::vector<ConfigField> schema(const std::string &plugin)
 {
-    if (plugin == "peak_tracker") return peakTrackerSchema();
-    if (plugin == "echoes_automatic") return echoesAutomaticSchema();
-    if (plugin == "meteor_logger_3f") return meteorLogger3fSchema();
-    throw std::runtime_error("unknown detector plugin: " + plugin);
+    const std::vector<std::string> names = pluginNames();
+    if (std::find(names.begin(), names.end(), plugin) == names.end())
+        throw std::runtime_error("unknown detector plugin: " + plugin);
+
+    std::vector<ConfigField> out;
+    const std::vector<const meteoris_config_schema::Parameter *> fields =
+        meteoris_config_schema::pluginParameters(plugin);
+    out.reserve(fields.size());
+    for (const meteoris_config_schema::Parameter *field : fields)
+    {
+        const char *key = field->path;
+        if (std::string(key).compare(0, 9, "detector.") == 0) key += 9;
+        out.push_back(ConfigField(key, field->defaultRaw, field->description));
+    }
+    return out;
 }
 
 void validate(const Selection &selection, const Environment &environment)
 {
+    // Validate scalar metadata and static cross-parameter constraints from the
+    // declarative schema before plugin geometry-dependent validation.
+    meteoris_config_schema::Values schemaValues;
+    schemaValues.setRaw("detector.plugin", "\"" + selection.plugin + "\"");
+    for (const auto &kv : selection.config.values())
+        schemaValues.setRaw("detector." + kv.first, kv.second);
+    meteoris_config_schema::validateConstraints(schemaValues);
+
     // Config files may contain sections for several compiled-in plugins. Reject
     // keys that are not declared by any schema so detector option typos do not
     // become silently ignored raw values.

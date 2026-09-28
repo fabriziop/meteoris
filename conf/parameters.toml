@@ -1,0 +1,1082 @@
+# Meteoris configuration schema.
+#
+# This is the authoritative source for parameter defaults, scalar types, ranges,
+# choices, descriptions, and cross-parameter constraints. C++ metadata/defaults are
+# generated from this file; do not duplicate configuration defaults in C++.
+
+[[parameter]]
+path = "sdr.driver"
+type = "string"
+default = "hackrf-htime"
+description = "The SoapySDR driver id of the connected SDR."
+
+[[parameter]]
+path = "sdr.sample_rate"
+type = "float"
+default = 10000000.0
+description = "SDR sample rate."
+min = 0
+
+[[parameter]]
+path = "sdr.center_frequency"
+type = "float"
+default = 0.0
+description = "Set to 0 to leave frequency unchanged by Meteoris."
+min = 0
+
+[[parameter]]
+path = "sdr.gain"
+type = "float"
+default = -1.0
+description = "Initial gain. When AGC is enabled this is the starting value."
+
+[[parameter]]
+path = "simulator.period_s"
+type = "float"
+default = 8.0
+description = "The complete synthetic pattern repeats every this many seconds."
+min = 0
+
+# Number of periods that contain signals. 0 repeats indefinitely. After the
+# last cycle the source continues producing background noise only.
+[[parameter]]
+path = "simulator.cycle_count"
+type = "integer"
+default = 0
+description = "Number of periods that contain signals."
+min = 0
+
+# Absolute amount subtracted from both signal amplitudes after every cycle.
+# Cycle 1 uses the amplitudes below; amplitudes are clamped at zero.
+[[parameter]]
+path = "simulator.amplitude_reduction"
+type = "float"
+default = 0.0
+description = "Absolute amount subtracted from both signal amplitudes after every cycle."
+min = 0
+
+[[parameter]]
+path = "simulator.noise_amplitude"
+type = "float"
+default = 5.0
+description = "Approximate complex-noise amplitude in native CS8 counts at gain=20 dB."
+min = 0
+
+[[parameter]]
+path = "simulator.stationary_enabled"
+type = "boolean"
+default = true
+description = "Enable the generation of the stationary signal."
+
+[[parameter]]
+path = "simulator.stationary_start_s"
+type = "float"
+default = 0.8
+description = "Start time (s) of stationary signal."
+min = 0
+
+[[parameter]]
+path = "simulator.stationary_rise_s"
+type = "float"
+default = 0.35
+description = "Rise time (s) of the stationary signal."
+min = 0
+
+[[parameter]]
+path = "simulator.stationary_hold_s"
+type = "float"
+default = 1.0
+description = "Level hold time (s) of the stationary signal."
+min = 0
+
+[[parameter]]
+path = "simulator.stationary_fall_s"
+type = "float"
+default = 0.65
+description = "Fall time (s) of the stationary signal."
+min = 0
+
+[[parameter]]
+path = "simulator.stationary_offset_hz"
+type = "float"
+default = 0.0
+description = "Freq. offset (Hz) from zero of the stationary signal."
+
+[[parameter]]
+path = "simulator.stationary_amplitude"
+type = "float"
+default = 3.0
+description = "Hold level amplitude (a.u.) of the stationary signal."
+min = 0
+
+[[parameter]]
+path = "simulator.chirp_enabled"
+type = "boolean"
+default = true
+description = "Enable the generation of the chirp signal."
+
+[[parameter]]
+path = "simulator.chirp_start_s"
+type = "float"
+default = 4.0
+description = "Start time (s) of the chirp signal."
+min = 0
+
+[[parameter]]
+path = "simulator.chirp_duration_s"
+type = "float"
+default = 1.2
+description = "Level hold time (s) of the chirp signal."
+min = 0
+
+[[parameter]]
+path = "simulator.chirp_start_offset_hz"
+type = "float"
+default = 38000.0
+description = "Freq. offset at the start of the chirp signal."
+
+[[parameter]]
+path = "simulator.chirp_end_offset_hz"
+type = "float"
+default = 12000.0
+description = "Freq. offset at the end of the chirp signal."
+
+[[parameter]]
+path = "simulator.chirp_amplitude"
+type = "float"
+default = 6.0
+description = "hold level (a.u.) of the chirp signal."
+min = 0
+
+[[parameter]]
+path = "dsp.shift_hz"
+type = "float"
+default = 1000000.0
+description = "off center shift - SDR compensation: +710000 - 1350 = +708650"
+
+[[parameter]]
+path = "dsp.decimation_stage1"
+type = "integer"
+default = 8
+description = "Decimation ratio of stage 1."
+min = 1
+
+[[parameter]]
+path = "dsp.decimation_stage2"
+type = "integer"
+default = 5
+description = "Decimation ratio of stage 2."
+min = 1
+
+[[parameter]]
+path = "dsp.bandwidth_hz"
+type = "float"
+default = 100000.0
+description = "Final processed bandwidth."
+min = 0
+
+[[parameter]]
+path = "dsp.attenuation_db"
+type = "float"
+default = 60.0
+description = "Out-of-band attenuation of the FIR decimation filters, in dB."
+min = 0
+
+[[parameter]]
+path = "psd.fft_size"
+type = "integer"
+default = 4096
+description = "FFT number of bins."
+min = 1
+
+[[parameter]]
+path = "runtime.daemon"
+type = "boolean"
+default = false
+description = "Detach from the terminal and run in the background."
+
+# A positive value stops automatically after this many seconds.
+[[parameter]]
+path = "runtime.run_seconds"
+type = "float"
+default = 0.0
+description = "0 = run continuously until SIGINT/SIGTERM."
+min = 0
+
+[[parameter]]
+path = "runtime.stream_buffers"
+type = "integer"
+default = 16
+description = "Number of SoapySDR streaming buffers."
+min = 1
+
+[[parameter]]
+path = "runtime.direct_buffer"
+type = "boolean"
+default = true
+description = "Use SoapySDR direct-buffer access when supported."
+
+# 1 uses SIMD on one core and is the safest default.
+# 2 splits FIR1 outputs across the caller plus one persistent worker thread.
+# Benchmark both values on the target CPU; two threads help only when FIR1 is CPU-bound.
+[[parameter]]
+path = "runtime.fir1_threads"
+type = "integer"
+default = 1
+description = "FIR1 block-kernel worker count."
+min = 1
+max = 2
+
+[[parameter]]
+path = "logging.level"
+type = "string"
+default = "info"
+description = "Runtime logging level: trace, debug, info, warn, error, critical, or off."
+choices = ["trace", "debug", "info", "warn", "error", "critical", "off"]
+
+[[parameter]]
+path = "logging.color"
+type = "boolean"
+default = true
+description = "ANSI terminal colors by level in foreground mode."
+
+# Daemon mode uses the file only: no syslog.
+[[parameter]]
+path = "logging.file_enabled"
+type = "boolean"
+default = true
+description = "Write the same selected log levels to a plain text file."
+
+[[parameter]]
+path = "logging.file"
+type = "string"
+default = "meteoris.log"
+description = "Meteoris setting logging.file."
+
+# Later daily rotations always append/create safely.
+[[parameter]]
+path = "logging.file_truncate"
+type = "boolean"
+default = false
+description = "false appends if today's dated log already exists; true truncates today's log when Meteoris starts."
+
+[[parameter]]
+path = "logging.daily_rotation"
+type = "boolean"
+default = true
+description = "Rotate the text log at a fixed UTC boundary, using the same logical-day convention as output.daily_rotate_time."
+
+[[parameter]]
+path = "logging.daily_rotate_time"
+type = "string"
+default = "00:00"
+description = "Daily time when to apply log file rotation."
+
+# The clipping count is collected during the existing 10 Msps DSP pass,
+# so no extra input scan is done.
+[[parameter]]
+path = "agc.enabled"
+type = "boolean"
+default = false
+description = "Low-cost AGC based on clipping of native CS8 ADC samples."
+
+[[parameter]]
+path = "agc.target_saturation_percent"
+type = "float"
+default = 1.0
+description = "Keep the exponentially-smoothed fraction of clipped complex samples near/below this value."
+min = 0
+max = 100
+
+[[parameter]]
+path = "agc.time_constant_s"
+type = "float"
+default = 2.0
+description = "Response/smoothing time constant. Larger values reduce gain pumping."
+min = 0
+
+[[parameter]]
+path = "agc.clip_level"
+type = "integer"
+default = 126
+description = "Treat I or Q magnitudes at/above this native CS8 level as saturated/near-saturated."
+min = 1
+max = 128
+
+[[parameter]]
+path = "agc.min_gain_db"
+type = "float"
+default = -1.0
+description = "-1 uses the gain range reported by the Soapy driver."
+
+[[parameter]]
+path = "agc.max_gain_db"
+type = "float"
+default = -1.0
+description = "Maximum AGC level (dB)."
+
+[[parameter]]
+path = "agc.max_step_db"
+type = "float"
+default = 1.0
+description = "Maximum gain change per AGC update."
+min = 0
+
+# Browser gateway interface. The sockets listen when enabled, but Meteoris only
+# queues/transmits PSD frames while meteoris_web has an active PSD connection.
+[[parameter]]
+path = "network.enabled"
+type = "boolean"
+default = true
+description = "Browser gateway interface."
+
+[[parameter]]
+path = "network.bind_address"
+type = "string"
+default = "127.0.0.1"
+description = "IPv4 interface to listen on; loopback is safest for a same-host gateway."
+
+[[parameter]]
+path = "network.psd_port"
+type = "integer"
+default = 5510
+description = "Binary PSD TCP stream port."
+min = 1
+max = 65535
+
+[[parameter]]
+path = "network.control_port"
+type = "integer"
+default = 5511
+description = "Reliable request/reply control TCP port."
+min = 1
+max = 65535
+
+[[parameter]]
+path = "network.queue_frames"
+type = "integer"
+default = 16
+description = "Best-effort network queue. When full, oldest network-only frames are dropped; detector/recorder delivery is unaffected."
+min = 1
+
+[[parameter]]
+path = "recording.mode"
+type = "string"
+default = "triggered"
+description = "\"triggered\": detector controls recording. \"continuous\": detector is ignored and PSDs are recorded in bounded segments."
+choices = ["triggered", "continuous"]
+
+[[parameter]]
+path = "recording.segment_seconds"
+type = "float"
+default = 15.0
+description = "Maximum continuous segment duration. Used only in continuous mode."
+min = 0
+
+[[parameter]]
+path = "recording.segment_count"
+type = "integer"
+default = 0
+description = "0 = unlimited; otherwise stop cleanly after this many complete segments."
+min = 0
+
+[[parameter]]
+path = "detector.enabled"
+type = "boolean"
+default = true
+description = "Enable meteor detection."
+
+[[parameter]]
+path = "detector.plugin"
+type = "string"
+default = "peak_tracker"
+description = "Compile-time registered detector implementation selected at runtime."
+choices = ["peak_tracker", "echoes_automatic", "meteor_logger_3f"]
+
+[[parameter]]
+path = "detector.threads"
+type = "integer"
+default = 1
+description = "0 lets a future plugin choose automatically."
+min = 0
+
+[[parameter]]
+path = "detector.frequency_mean_bins"
+type = "integer"
+default = 5
+description = "Shared PSD preprocessing. Means are computed in LINEAR PSD power. Frequency mean is centered; use an odd number of bins."
+min = 1
+plugins = ["peak_tracker"]
+
+[[parameter]]
+path = "detector.time_mean_psds"
+type = "integer"
+default = 3
+description = "Causal time mean: current PSD plus previous PSDs."
+min = 1
+plugins = ["peak_tracker"]
+
+[[parameter]]
+path = "detector.peak_threshold_db"
+type = "float"
+default = 5.0
+description = "A spectral local maximum becomes a candidate when the doubly-smoothed PSD is this many dB above the current whole-band MEDIAN background."
+min = 0
+plugins = ["peak_tracker"]
+
+[[parameter]]
+path = "detector.min_peak_separation_hz"
+type = "float"
+default = 300.0
+description = "Nearby local maxima are consolidated by keeping the strongest peak."
+min = 0
+plugins = ["peak_tracker"]
+
+[[parameter]]
+path = "detector.max_peaks_per_psd"
+type = "integer"
+default = 20
+description = "Safety limit after consolidation. Strongest peaks are retained; excess peaks are dropped and a rate-limited warning is emitted."
+min = 1
+plugins = ["peak_tracker"]
+
+[[parameter]]
+path = "detector.diagnostic_interval_s"
+type = "float"
+default = 1.0
+description = "0 disables periodic detector diagnostics."
+min = 0
+
+[[parameter]]
+path = "detector.pre_context_s"
+type = "float"
+default = 0.5
+description = "Period to be recorded (s) before start trigger."
+min = 0
+
+[[parameter]]
+path = "detector.post_context_s"
+type = "float"
+default = 1.0
+description = "Period to be recorded (s) after end trigger."
+min = 0
+
+[[parameter]]
+path = "detector.max_event_seconds"
+type = "float"
+default = 15.0
+description = "Maximum event duration. For peak_tracker, an event reaching this limit is discarded completely from HDF5. 0 disables the limit."
+min = 0
+
+[[parameter]]
+path = "detector.rearm_seconds"
+type = "float"
+default = 1.0
+description = "Trigger inhibit after a maximum-duration discard/cutoff."
+min = 0
+
+[[parameter]]
+path = "detector.beep_on_recorded_event"
+type = "boolean"
+default = false
+description = "Emit a terminal/system beep when a detector event is successfully recorded."
+
+[[parameter]]
+path = "detector.stationary.enabled"
+type = "boolean"
+default = true
+description = "Enable detection of near zero doppler signals."
+plugins = ["peak_tracker"]
+
+[[parameter]]
+path = "detector.stationary.min_hz"
+type = "float"
+default = -5000.0
+description = "Only tracks inside this near-zero region can become stationary detections."
+plugins = ["peak_tracker"]
+
+[[parameter]]
+path = "detector.stationary.max_hz"
+type = "float"
+default = 5000.0
+description = "Only tracks inside this near-zero region can become stationary detections."
+plugins = ["peak_tracker"]
+
+[[parameter]]
+path = "detector.stationary.max_df_hz"
+type = "float"
+default = 250.0
+description = "Maximum frequency error for association to the last stationary position."
+min = 0
+plugins = ["peak_tracker"]
+
+[[parameter]]
+path = "detector.stationary.activation_time_s"
+type = "float"
+default = 0.5
+description = "Tentative track must reach this age and occupancy before becoming active."
+min = 0
+plugins = ["peak_tracker"]
+
+[[parameter]]
+path = "detector.stationary.activation_fraction"
+type = "float"
+default = 0.5
+description = "Minimum duty cycle to detect a stationary signal."
+min = 0
+max = 1
+plugins = ["peak_tracker"]
+
+[[parameter]]
+path = "detector.stationary.lost_s"
+type = "float"
+default = 0.3
+description = "Active/tentative stationary track survives gaps up to this time."
+min = 0
+plugins = ["peak_tracker"]
+
+[[parameter]]
+path = "detector.stationary.max_drift_hz_s"
+type = "float"
+default = 1000.0
+description = "Average |df/dt| at or below this value classifies an unknown track stationary."
+min = 0
+plugins = ["peak_tracker"]
+
+[[parameter]]
+path = "detector.chirp.enabled"
+type = "boolean"
+default = true
+description = "Enable detection of chirp signals (high doppler)."
+plugins = ["peak_tracker"]
+
+[[parameter]]
+path = "detector.chirp.min_hz"
+type = "float"
+default = -50000.0
+description = "Chirps may occur across the complete observation band."
+plugins = ["peak_tracker"]
+
+[[parameter]]
+path = "detector.chirp.max_hz"
+type = "float"
+default = 50000.0
+description = "Chirps may occur across the complete observation band."
+plugins = ["peak_tracker"]
+
+[[parameter]]
+path = "detector.chirp.max_df_hz"
+type = "float"
+default = 1500.0
+description = "Matching window around the predicted frequency."
+min = 0
+plugins = ["peak_tracker"]
+
+[[parameter]]
+path = "detector.chirp.activation_time_s"
+type = "float"
+default = 0.05
+description = "Tentative track must reach this age and occupancy before becoming active."
+min = 0
+plugins = ["peak_tracker"]
+
+[[parameter]]
+path = "detector.chirp.activation_fraction"
+type = "float"
+default = 0.7
+description = "Minimum duty cycle to detect a chirp signal."
+min = 0
+max = 1
+plugins = ["peak_tracker"]
+
+[[parameter]]
+path = "detector.chirp.lost_s"
+type = "float"
+default = 0.08
+description = "Chirp tracks are allowed only short gaps because prediction uncertainty grows fast."
+min = 0
+plugins = ["peak_tracker"]
+
+[[parameter]]
+path = "detector.chirp.min_drift_hz_s"
+type = "float"
+default = 3000.0
+description = "Average drift range used to classify a generic tentative track as a chirp."
+min = 0
+plugins = ["peak_tracker"]
+
+[[parameter]]
+path = "detector.chirp.max_drift_hz_s"
+type = "float"
+default = 150000.0
+description = "Average drift range used to classify a generic tentative track as a chirp."
+min = 0
+plugins = ["peak_tracker"]
+
+[[parameter]]
+path = "detector.echoes.threshold_mode"
+type = "string"
+default = "automatic"
+description = "Threshold type. Used when detector.plugin = \"echoes_automatic\"."
+choices = ["absolute", "differential", "automatic"]
+plugins = ["echoes_automatic"]
+
+# Width <= 0 selects the full band.
+[[parameter]]
+path = "detector.echoes.detection_center_hz"
+type = "float"
+default = 0.0
+description = "Detection interval in PSD frequency offsets."
+plugins = ["echoes_automatic"]
+
+[[parameter]]
+path = "detector.echoes.detection_width_hz"
+type = "float"
+default = 0.0
+description = "Detection bandwidth (Hz)."
+min = 0
+plugins = ["echoes_automatic"]
+
+[[parameter]]
+path = "detector.echoes.absolute_lower_db_hz"
+type = "float"
+default = -90.0
+description = "Absolute mode thresholds in Meteoris PSD-density dB/Hz."
+plugins = ["echoes_automatic"]
+
+[[parameter]]
+path = "detector.echoes.absolute_upper_db_hz"
+type = "float"
+default = -85.0
+description = "Absolute mode thresholds in Meteoris PSD-density dB/Hz."
+plugins = ["echoes_automatic"]
+
+[[parameter]]
+path = "detector.echoes.differential_lower_db"
+type = "float"
+default = 4.0
+description = "Differential mode thresholds for S-N in dB."
+plugins = ["echoes_automatic"]
+
+[[parameter]]
+path = "detector.echoes.differential_upper_db"
+type = "float"
+default = 7.0
+description = "Differential mode thresholds for S-N in dB."
+plugins = ["echoes_automatic"]
+
+# Automatic upper = lower + upper delta. Thresholds freeze during an event.
+[[parameter]]
+path = "detector.echoes.automatic_lower_offset_db"
+type = "float"
+default = 4.0
+description = "Automatic lower = idle mean(S-N) + lower offset."
+min = 0
+plugins = ["echoes_automatic"]
+
+[[parameter]]
+path = "detector.echoes.automatic_upper_delta_db"
+type = "float"
+default = 3.0
+description = "Meteoris setting detector.echoes.automatic_upper_delta_db."
+min = 0
+plugins = ["echoes_automatic"]
+
+[[parameter]]
+path = "detector.echoes.automatic_warmup_s"
+type = "float"
+default = 5.0
+description = "Meteoris setting detector.echoes.automatic_warmup_s."
+min = 0
+plugins = ["echoes_automatic"]
+
+[[parameter]]
+path = "detector.echoes.automatic_baseline_time_constant_s"
+type = "float"
+default = 30.0
+description = "Meteoris setting detector.echoes.automatic_baseline_time_constant_s."
+min = 0
+plugins = ["echoes_automatic"]
+
+[[parameter]]
+path = "detector.echoes.automatic_stddev_window_s"
+type = "float"
+default = 1.0
+description = "Meteoris setting detector.echoes.automatic_stddev_window_s."
+min = 0
+plugins = ["echoes_automatic"]
+
+[[parameter]]
+path = "detector.echoes.automatic_end_stddev_factor"
+type = "float"
+default = 2.0
+description = "Meteoris setting detector.echoes.automatic_end_stddev_factor."
+min = 0
+plugins = ["echoes_automatic"]
+
+# pre_context_s must be at least this long so the initial peak is retained
+# in the HDF5 event.
+[[parameter]]
+path = "detector.echoes.delay_before_trigger_s"
+type = "float"
+default = 0.0
+description = "Delay detector activation after an upper crossing."
+min = 0
+plugins = ["echoes_automatic"]
+
+[[parameter]]
+path = "detector.echoes.join_events_closer_than_s"
+type = "float"
+default = 1.0
+description = "Keep an event active until it has remained below its end conditions for this duration, joining briefly interrupted illumination into one event."
+min = 0
+plugins = ["echoes_automatic"]
+
+# The three strongest PSD
+# frequencies must cluster, then persist as a frequency-continuous sequence.
+[[parameter]]
+path = "detector.meteor_logger.detection_min_hz"
+type = "float"
+default = -49000.0
+description = "Used when detector.plugin = \"meteor_logger_3f\"."
+plugins = ["meteor_logger_3f"]
+
+[[parameter]]
+path = "detector.meteor_logger.detection_max_hz"
+type = "float"
+default = 49000.0
+description = "Meteoris setting detector.meteor_logger.detection_max_hz."
+plugins = ["meteor_logger_3f"]
+
+[[parameter]]
+path = "detector.meteor_logger.cluster_width_hz"
+type = "float"
+default = 250.0
+description = "Meteoris setting detector.meteor_logger.cluster_width_hz."
+min = 0
+plugins = ["meteor_logger_3f"]
+
+# One missing frame is allowed.
+[[parameter]]
+path = "detector.meteor_logger.sequence_frames"
+type = "integer"
+default = 6
+description = "Paper modes: 5 = sensitive, 6 = robust."
+min = 2
+plugins = ["meteor_logger_3f"]
+
+[[parameter]]
+path = "detector.meteor_logger.allowed_gaps"
+type = "integer"
+default = 1
+description = "Meteoris setting detector.meteor_logger.allowed_gaps."
+min = 0
+plugins = ["meteor_logger_3f"]
+
+[[parameter]]
+path = "detector.meteor_logger.max_drift_hz_s"
+type = "float"
+default = 11000.0
+description = "Meteoris setting detector.meteor_logger.max_drift_hz_s."
+min = 0
+plugins = ["meteor_logger_3f"]
+
+[[parameter]]
+path = "detector.meteor_logger.release_s"
+type = "float"
+default = 0.15
+description = "Meteoris setting detector.meteor_logger.release_s."
+min = 0
+plugins = ["meteor_logger_3f"]
+
+[[parameter]]
+path = "detector.meteor_logger.auto_notch_enabled"
+type = "boolean"
+default = true
+description = "Learn a persistent clustered line as interference and exclude its band."
+plugins = ["meteor_logger_3f"]
+
+[[parameter]]
+path = "detector.meteor_logger.auto_notch_after_s"
+type = "float"
+default = 10.0
+description = "Meteoris setting detector.meteor_logger.auto_notch_after_s."
+min = 0
+plugins = ["meteor_logger_3f"]
+
+[[parameter]]
+path = "detector.meteor_logger.auto_notch_width_hz"
+type = "float"
+default = 200.0
+description = "Meteoris setting detector.meteor_logger.auto_notch_width_hz."
+min = 0
+plugins = ["meteor_logger_3f"]
+
+[[parameter]]
+path = "detector.meteor_logger.max_auto_notches"
+type = "integer"
+default = 4
+description = "Meteoris setting detector.meteor_logger.max_auto_notches."
+min = 1
+plugins = ["meteor_logger_3f"]
+
+[[parameter]]
+path = "output.directory"
+type = "string"
+default = "./data"
+description = "One HDF5 file is created/appended per UTC day."
+
+[[parameter]]
+path = "output.file_prefix"
+type = "string"
+default = "meteoris"
+description = "Meteoris setting output.file_prefix."
+
+[[parameter]]
+path = "output.hdf5_compression"
+type = "integer"
+default = 1
+description = "0 disables gzip; 1 is a good low-CPU default for a real-time recorder."
+min = 0
+max = 9
+
+# Keep enabled to allow meteoris_plot to open the active daily file while
+# Meteoris is recording.
+[[parameter]]
+path = "output.swmr"
+type = "boolean"
+default = true
+description = "HDF5 Single-Writer/Multiple-Reader mode."
+
+# 0 flushes after every saved PSD; 1 second is a low-overhead default.
+[[parameter]]
+path = "output.swmr_flush_seconds"
+type = "float"
+default = 1.0
+description = "Publish newly written rows to SWMR readers at this interval."
+min = 0
+
+# Format: HH:MM.
+# If an event is active at the boundary, rotation is delayed until the complete
+# event, including post-trigger context, has been saved.
+[[parameter]]
+path = "output.daily_rotate_time"
+type = "string"
+default = "00:00"
+description = "UTC time when a new logical daily HDF5 file should begin."
+
+# The rate is checked over 10-second windows to ignore short HDF5 allocation bursts.
+# 0 disables the growth-rate safety check.
+[[parameter]]
+path = "output.max_growth_mb_per_min"
+type = "float"
+default = 0.0
+description = "Stop Meteoris if the HDF5 file grows faster than this sustained rate."
+min = 0
+
+# 0 disables the free-space safety check.
+[[parameter]]
+path = "output.min_free_space_gb"
+type = "float"
+default = 1.0
+description = "Stop Meteoris when available space on the output filesystem falls below this value."
+min = 0
+
+[[constraint]]
+name = "psd_fft_power_of_two"
+expression = "is_power_of_two(psd.fft_size)"
+description = "PSD FFT size must be a power of two."
+
+[[constraint]]
+name = "bandwidth_below_output_rate"
+expression = "dsp.bandwidth_hz < sdr.sample_rate / (dsp.decimation_stage1 * dsp.decimation_stage2)"
+description = "Processed bandwidth must be smaller than the final output sample rate."
+
+[[constraint]]
+name = "agc_gain_order"
+expression = "agc.min_gain_db < 0 || agc.max_gain_db < 0 || agc.min_gain_db <= agc.max_gain_db"
+description = "AGC minimum gain must not exceed maximum gain when both are explicit."
+
+[[constraint]]
+name = "recording_detector_dependency"
+expression = "recording.mode != \"triggered\" || detector.enabled"
+description = "Triggered recording requires the detector to be enabled."
+
+[[constraint]]
+name = "stationary_range"
+expression = "!detector.enabled || detector.plugin != \"peak_tracker\" || (!detector.stationary.enabled || detector.stationary.min_hz < detector.stationary.max_hz)"
+description = "Stationary minimum frequency must be below maximum frequency."
+
+[[constraint]]
+name = "chirp_range"
+expression = "!detector.enabled || detector.plugin != \"peak_tracker\" || (!detector.chirp.enabled || detector.chirp.min_hz < detector.chirp.max_hz)"
+description = "Chirp minimum frequency must be below maximum frequency."
+
+[[constraint]]
+name = "chirp_drift_range"
+expression = "!detector.enabled || detector.plugin != \"peak_tracker\" || (detector.chirp.min_drift_hz_s < detector.chirp.max_drift_hz_s)"
+description = "Chirp minimum drift must be below maximum drift."
+
+[[constraint]]
+name = "echoes_absolute_thresholds"
+expression = "!detector.enabled || detector.plugin != \"echoes_automatic\" || (detector.echoes.absolute_lower_db_hz < detector.echoes.absolute_upper_db_hz)"
+description = "Echoes absolute lower threshold must be below upper threshold."
+
+[[constraint]]
+name = "echoes_differential_thresholds"
+expression = "!detector.enabled || detector.plugin != \"echoes_automatic\" || (detector.echoes.differential_lower_db < detector.echoes.differential_upper_db)"
+description = "Echoes differential lower threshold must be below upper threshold."
+
+[[constraint]]
+name = "meteor_logger_frequency_range"
+expression = "!detector.enabled || detector.plugin != \"meteor_logger_3f\" || (detector.meteor_logger.detection_min_hz < detector.meteor_logger.detection_max_hz)"
+description = "Meteor Logger minimum detection frequency must be below maximum frequency."
+
+[[constraint]]
+name = "meteor_logger_sequence_gaps"
+expression = "!detector.enabled || detector.plugin != \"meteor_logger_3f\" || (detector.meteor_logger.allowed_gaps < detector.meteor_logger.sequence_frames)"
+description = "Meteor Logger allowed gaps must be less than sequence length."
+
+[[constraint]]
+name = "simulator_stationary_period"
+expression = "sdr.driver != \"meteoris_sim\" || (!simulator.stationary_enabled || simulator.stationary_start_s + simulator.stationary_rise_s + simulator.stationary_hold_s + simulator.stationary_fall_s <= simulator.period_s)"
+description = "Simulator stationary event must fit within one period."
+
+[[constraint]]
+name = "simulator_chirp_period"
+expression = "sdr.driver != \"meteoris_sim\" || (!simulator.chirp_enabled || simulator.chirp_start_s + simulator.chirp_duration_s <= simulator.period_s)"
+description = "Simulator chirp event must fit within one period."
+
+# Soapy simulator device defaults used when the module is opened directly,
+# before a host application applies SDR settings.
+[[parameter]]
+path = "simulator.device_frequency_hz"
+type = "float"
+default = 143051460.0
+description = "Initial simulator tuning frequency when the Soapy module is opened directly."
+min = 0
+
+[[parameter]]
+path = "simulator.device_bandwidth_hz"
+type = "float"
+default = 10000000.0
+description = "Initial simulator device bandwidth when the Soapy module is opened directly."
+min = 0
+
+[[parameter]]
+path = "simulator.device_gain_db"
+type = "float"
+default = 20.0
+description = "Initial simulator gain when the Soapy module is opened directly."
+
+[[constraint]]
+name = "positive_sample_rate"
+expression = "sdr.sample_rate > 0"
+description = "SDR sample rate must be greater than zero."
+
+[[constraint]]
+name = "positive_bandwidth"
+expression = "dsp.bandwidth_hz > 0"
+description = "Processed bandwidth must be greater than zero."
+
+[[constraint]]
+name = "positive_simulator_period"
+expression = "sdr.driver != \"meteoris_sim\" || (simulator.period_s > 0)"
+description = "Simulator period must be greater than zero."
+
+[[constraint]]
+name = "positive_simulator_chirp_duration"
+expression = "sdr.driver != \"meteoris_sim\" || (simulator.chirp_duration_s > 0)"
+description = "Simulator chirp duration must be greater than zero."
+
+[[constraint]]
+name = "positive_recording_segment"
+expression = "recording.segment_seconds > 0"
+description = "Recording segment duration must be greater than zero."
+
+[[constraint]]
+name = "positive_agc_target"
+expression = "!agc.enabled || agc.target_saturation_percent > 0"
+description = "AGC saturation target must be greater than zero when AGC is enabled."
+
+[[constraint]]
+name = "positive_agc_time_constant"
+expression = "!agc.enabled || agc.time_constant_s > 0"
+description = "AGC time constant must be greater than zero when AGC is enabled."
+
+[[constraint]]
+name = "positive_agc_step"
+expression = "!agc.enabled || agc.max_step_db > 0"
+description = "AGC maximum gain step must be greater than zero when AGC is enabled."
+
+[[constraint]]
+name = "detector_frequency_mean_odd"
+expression = "!detector.enabled || detector.plugin != \"peak_tracker\" || (detector.frequency_mean_bins % 2 == 1)"
+description = "Detector frequency mean width must be an odd positive number of bins."
+
+[[constraint]]
+name = "positive_peak_threshold"
+expression = "!detector.enabled || detector.plugin != \"peak_tracker\" || (detector.peak_threshold_db > 0)"
+description = "Detector peak threshold must be greater than zero."
+
+[[constraint]]
+name = "peak_tracker_has_mode"
+expression = "!detector.enabled || detector.plugin != \"peak_tracker\" || (detector.stationary.enabled || detector.chirp.enabled)"
+description = "Peak tracker requires stationary or chirp tracking to be enabled."
+
+[[constraint]]
+name = "positive_stationary_df"
+expression = "!detector.enabled || detector.plugin != \"peak_tracker\" || (!detector.stationary.enabled || detector.stationary.max_df_hz > 0)"
+description = "Stationary association tolerance must be greater than zero when enabled."
+
+[[constraint]]
+name = "positive_stationary_fraction"
+expression = "!detector.enabled || detector.plugin != \"peak_tracker\" || (!detector.stationary.enabled || detector.stationary.activation_fraction > 0)"
+description = "Stationary activation fraction must be greater than zero when enabled."
+
+[[constraint]]
+name = "positive_chirp_df"
+expression = "!detector.enabled || detector.plugin != \"peak_tracker\" || (!detector.chirp.enabled || detector.chirp.max_df_hz > 0)"
+description = "Chirp association tolerance must be greater than zero when enabled."
+
+[[constraint]]
+name = "positive_chirp_fraction"
+expression = "!detector.enabled || detector.plugin != \"peak_tracker\" || (!detector.chirp.enabled || detector.chirp.activation_fraction > 0)"
+description = "Chirp activation fraction must be greater than zero when enabled."
+
+[[constraint]]
+name = "positive_echoes_automatic_delta"
+expression = "!detector.enabled || detector.plugin != \"echoes_automatic\" || (detector.echoes.automatic_upper_delta_db > 0)"
+description = "Echoes automatic upper-threshold delta must be greater than zero."
+
+[[constraint]]
+name = "positive_echoes_baseline_time"
+expression = "!detector.enabled || detector.plugin != \"echoes_automatic\" || (detector.echoes.automatic_baseline_time_constant_s > 0)"
+description = "Echoes automatic baseline time constant must be greater than zero."
+
+[[constraint]]
+name = "positive_echoes_stddev_window"
+expression = "!detector.enabled || detector.plugin != \"echoes_automatic\" || (detector.echoes.automatic_stddev_window_s > 0)"
+description = "Echoes standard-deviation window must be greater than zero."
+
+[[constraint]]
+name = "positive_echoes_end_factor"
+expression = "!detector.enabled || detector.plugin != \"echoes_automatic\" || (detector.echoes.automatic_end_stddev_factor > 0)"
+description = "Echoes event-end standard-deviation factor must be greater than zero."
+
+[[constraint]]
+name = "positive_meteor_logger_cluster"
+expression = "!detector.enabled || detector.plugin != \"meteor_logger_3f\" || (detector.meteor_logger.cluster_width_hz > 0)"
+description = "Meteor Logger cluster width must be greater than zero."
+
+[[constraint]]
+name = "positive_meteor_logger_drift"
+expression = "!detector.enabled || detector.plugin != \"meteor_logger_3f\" || (detector.meteor_logger.max_drift_hz_s > 0)"
+description = "Meteor Logger maximum drift must be greater than zero."
+
+[[constraint]]
+name = "meteor_logger_notch_values"
+expression = "!detector.enabled || detector.plugin != \"meteor_logger_3f\" || (!detector.meteor_logger.auto_notch_enabled || (detector.meteor_logger.auto_notch_after_s > 0 && detector.meteor_logger.auto_notch_width_hz > 0 && detector.meteor_logger.max_auto_notches > 0))"
+description = "Enabled Meteor Logger auto-notch settings must use positive persistence, width, and count values."
+
+#### END

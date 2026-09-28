@@ -19,14 +19,17 @@ positional argument:
 meteoris_config /etc/meteoris/site.toml
 ```
 
-When there is no current file, values and ordering come from the installed
-canonical `config/meteoris.toml` template. Missing settings in a partial current
-file are also filled from that canonical template.
+When there is no current file, proposed values and ordering come from the
+installed reference `conf/meteoris.toml` profile. Missing settings in a partial
+current file are also filled from that profile so the wizard can emit a complete
+site configuration. These proposed profile values are not the C++ fallback
+defaults: the authoritative C++ defaults, types, ranges, choices, descriptions,
+and declarative constraints are defined in `conf/parameters.toml`.
 
 ## Prompt modes
 
 At startup the wizard prints the Meteoris version and the input filename (or
-reports that `meteoris.toml` was not found and the canonical template is being
+reports that `meteoris.toml` was not found and the reference profile is being
 used). It then offers the two modes by number:
 
 ```text
@@ -37,7 +40,7 @@ Mode [1]:
 ```
 
 - **1 / smart** asks only operationally essential parameters. Settings not asked
-  are still written using the current value, or the canonical default when
+  are still written using the current value, or the reference-profile value when
   missing.
 - **2 / expert** asks every known parameter.
 
@@ -61,8 +64,8 @@ Every parameter is displayed with a `section.parameter` number, for example:
 
 When a current TOML is read, known sections and parameters are numbered in the
 order in which they appear there. Missing parameters are appended in the order
-from the canonical `config/meteoris.toml`. With no current file, canonical order
-is used throughout.
+from the reference `conf/meteoris.toml`. With no current file, reference-profile
+order is used throughout.
 
 The short explanation shown at each prompt is also written into the generated
 TOML as a numbered comment.

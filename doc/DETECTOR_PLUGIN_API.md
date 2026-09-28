@@ -200,29 +200,35 @@ plugin
 ## Configuration schema
 
 Detector-specific TOML values are stored by Meteoris as raw scalar strings in
-`detector::Config`. The core parses TOML structure, but it does not interpret the
-types or semantics of plugin-owned keys.
+`detector::Config`, then converted by the selected detector into its private typed
+configuration. The authoritative metadata for both common and detector-specific
+keys is no longer maintained as hand-written detector schema tables: it is declared
+in `conf/parameters.toml` and generated into C++ by `conf/generate_config.py`.
 
-Each compile-time detector implementation owns:
+Each compile-time detector implementation therefore owns:
 
 - its private typed configuration struct;
-- a `ConfigField` schema containing relative TOML key, default TOML value, and
-  description;
-- conversion from the generic `Config` view into its private configuration;
-- semantic and PSD-geometry validation;
+- conversion from the generic `Config` view into that private configuration;
+- detector behavior and PSD-geometry/runtime-dependent validation; and
 - optional generic recorder requirements, currently `minPreContextSeconds`.
 
-`meteoris.cpp` owns only common detector keys such as `enabled`, `plugin`, `threads`,
+`conf/parameters.toml` owns detector parameter paths, fallback defaults, scalar
+types, descriptions, static ranges/choices, ownership metadata, and declarative
+cross-parameter constraints. The generated schema is also used for effective/default
+configuration rendering and unknown-key validation. This prevents detector defaults
+or static limits from being duplicated between the schema and plugin C++.
+
+Common detector settings such as `enabled`, `plugin`, `threads`,
 `diagnostic_interval_s`, `pre_context_s`, `post_context_s`, `max_event_seconds`, and
-`rearm_seconds`. A detector can request `discardEventOnMaxDuration` in its `Info`;
-when set, the recorder removes the whole in-progress event instead of retaining a
-forced-cutoff prefix. `peak_tracker` enables this policy. Plugin schemas are also
-used to render the effective/default TOML,
-so adding a detector does not require adding its settings to `meteoris.cpp`.
+`rearm_seconds` are defined by the same schema. A detector can request
+`discardEventOnMaxDuration` in its `Info`; when set, the recorder removes the whole
+in-progress event instead of retaining a forced-cutoff prefix. `peak_tracker`
+enables this policy.
 
 Configuration files may contain settings for multiple compiled-in detectors. The
-registry accepts keys declared by any compiled-in schema and rejects unknown detector
-keys, preserving typo detection without coupling the core to a concrete plugin.
+registry accepts keys declared for compiled-in detectors by the generated schema and
+rejects unknown detector keys, preserving typo detection without coupling the core
+to a concrete plugin.
 
 ## Registry/factory
 

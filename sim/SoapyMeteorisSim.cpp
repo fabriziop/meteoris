@@ -6,6 +6,7 @@
 #include <SoapySDR/Version.hpp>
 
 #include "signal_cycle.hpp"
+#include "config_schema.hpp"
 
 #include <algorithm>
 #include <atomic>
@@ -342,20 +343,26 @@ private:
 
     void validateSignalConfig() const
     {
-        if (!(_eventPeriod > 0.0)) throw std::runtime_error("period_s must be > 0");
-        if (_noiseAmp < 0.0 || _stationaryAmp < 0.0 || _chirpAmp < 0.0 ||
-            _amplitudeReduction < 0.0)
-            throw std::runtime_error("simulator amplitudes must be >= 0");
-        if (_stationaryStart < 0.0 || _stationaryRise < 0.0 ||
-            _stationaryHold < 0.0 || _stationaryFall < 0.0)
-            throw std::runtime_error("stationary timing must be >= 0");
-        if (_stationaryEnabled &&
-            _stationaryStart + _stationaryRise + _stationaryHold + _stationaryFall > _eventPeriod)
-            throw std::runtime_error("stationary event exceeds period_s");
-        if (_chirpStart < 0.0 || !(_chirpDuration > 0.0))
-            throw std::runtime_error("chirp timing is invalid");
-        if (_chirpEnabled && _chirpStart + _chirpDuration > _eventPeriod)
-            throw std::runtime_error("chirp event exceeds period_s");
+        meteoris_config_schema::Values values;
+        values.setRaw("sdr.driver", "\"meteoris_sim\"");
+        values.setRaw("simulator.period_s", std::to_string(_eventPeriod));
+        values.setRaw("simulator.cycle_count", std::to_string(_cycleCount));
+        values.setRaw("simulator.amplitude_reduction", std::to_string(_amplitudeReduction));
+        values.setRaw("simulator.noise_amplitude", std::to_string(_noiseAmp));
+        values.setRaw("simulator.stationary_enabled", _stationaryEnabled ? "true" : "false");
+        values.setRaw("simulator.stationary_start_s", std::to_string(_stationaryStart));
+        values.setRaw("simulator.stationary_rise_s", std::to_string(_stationaryRise));
+        values.setRaw("simulator.stationary_hold_s", std::to_string(_stationaryHold));
+        values.setRaw("simulator.stationary_fall_s", std::to_string(_stationaryFall));
+        values.setRaw("simulator.stationary_offset_hz", std::to_string(_stationaryOffsetHz));
+        values.setRaw("simulator.stationary_amplitude", std::to_string(_stationaryAmp));
+        values.setRaw("simulator.chirp_enabled", _chirpEnabled ? "true" : "false");
+        values.setRaw("simulator.chirp_start_s", std::to_string(_chirpStart));
+        values.setRaw("simulator.chirp_duration_s", std::to_string(_chirpDuration));
+        values.setRaw("simulator.chirp_start_offset_hz", std::to_string(_chirpStartOffsetHz));
+        values.setRaw("simulator.chirp_end_offset_hz", std::to_string(_chirpEndOffsetHz));
+        values.setRaw("simulator.chirp_amplitude", std::to_string(_chirpAmp));
+        meteoris_config_schema::validateConstraints(values);
     }
 
     static void checkRx(const int direction, const size_t channel)
@@ -494,28 +501,28 @@ private:
         }
     }
 
-    double _sampleRate = 10e6;
-    double _frequency = 143.051460e6;
-    double _bandwidth = 10e6;
-    double _gainDb = 20.0;
+    double _sampleRate = meteoris_config_schema::default_sdr_sample_rate();
+    double _frequency = meteoris_config_schema::default_simulator_device_frequency_hz();
+    double _bandwidth = meteoris_config_schema::default_simulator_device_bandwidth_hz();
+    double _gainDb = meteoris_config_schema::default_simulator_device_gain_db();
 
-    double _eventPeriod = 8.0;
-    uint64_t _cycleCount = 0;
-    double _amplitudeReduction = 0.0;
-    double _noiseAmp = 5.0;
-    bool _stationaryEnabled = true;
-    double _stationaryStart = 0.8;
-    double _stationaryRise = 0.35;
-    double _stationaryHold = 1.0;
-    double _stationaryFall = 0.65;
-    double _stationaryOffsetHz = 0.0;
-    double _stationaryAmp = 3.0;
-    bool _chirpEnabled = true;
-    double _chirpStart = 4.0;
-    double _chirpDuration = 1.2;
-    double _chirpStartOffsetHz = 38e3;
-    double _chirpEndOffsetHz = 12e3;
-    double _chirpAmp = 6.0;
+    double _eventPeriod = meteoris_config_schema::default_simulator_period_s();
+    uint64_t _cycleCount = static_cast<uint64_t>(meteoris_config_schema::default_simulator_cycle_count());
+    double _amplitudeReduction = meteoris_config_schema::default_simulator_amplitude_reduction();
+    double _noiseAmp = meteoris_config_schema::default_simulator_noise_amplitude();
+    bool _stationaryEnabled = meteoris_config_schema::default_simulator_stationary_enabled();
+    double _stationaryStart = meteoris_config_schema::default_simulator_stationary_start_s();
+    double _stationaryRise = meteoris_config_schema::default_simulator_stationary_rise_s();
+    double _stationaryHold = meteoris_config_schema::default_simulator_stationary_hold_s();
+    double _stationaryFall = meteoris_config_schema::default_simulator_stationary_fall_s();
+    double _stationaryOffsetHz = meteoris_config_schema::default_simulator_stationary_offset_hz();
+    double _stationaryAmp = meteoris_config_schema::default_simulator_stationary_amplitude();
+    bool _chirpEnabled = meteoris_config_schema::default_simulator_chirp_enabled();
+    double _chirpStart = meteoris_config_schema::default_simulator_chirp_start_s();
+    double _chirpDuration = meteoris_config_schema::default_simulator_chirp_duration_s();
+    double _chirpStartOffsetHz = meteoris_config_schema::default_simulator_chirp_start_offset_hz();
+    double _chirpEndOffsetHz = meteoris_config_schema::default_simulator_chirp_end_offset_hz();
+    double _chirpAmp = meteoris_config_schema::default_simulator_chirp_amplitude();
 };
 
 SoapySDR::KwargsList findMeteorisSim(const SoapySDR::Kwargs &args)

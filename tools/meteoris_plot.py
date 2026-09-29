@@ -25,6 +25,7 @@ The program:
     - saves the currently displayed event data to that file with W;
     - terminate the interactive browser with Q or by closing the window;
   - provides interactive PSD color-scale minimum/maximum sliders;
+  - shows the 0..1 kHz positive-frequency PSD spectrum at the time of the Max-PSD peak;
   - provides controls for full/half PSD bandwidth, max/median-PSD traces, X/Y grid, and trigger markers;
   - marks trigger ON/OFF positions;
   - can save selected event plots as PNG files.
@@ -670,7 +671,10 @@ def plot_event(
         gridspec_kw={
             "height_ratios": (1.0, 4.0),
             "hspace": 0.0,
-            "left": 0.10,
+            # Leave room on the left for the PSD spectrum captured at the
+            # time where the Max-PSD trace reaches its peak.  That spectrum
+            # is intentionally tall/narrow: the Max-PSD panel rotated 90 deg.
+            "left": 0.19,
             "right": 0.88,
             "top": 0.90,
             "bottom": 0.20,
@@ -766,6 +770,74 @@ def plot_event(
         waterfall_pos.width,
         max_power_pos.y1 - waterfall_pos.y0,
     ]
+
+    # Temporal PSD of the complete Max-PSD trace shown above the waterfall.
+    # This uses every point in that trace, so its frequency resolution is set
+    # by the event duration / number of PSD time rows rather than by the RF
+    # frequency-bin spacing of the waterfall.  The panel mirrors the colorbar
+    # on the opposite side and spans the complete Max+waterfall stack.
+    ax_peak_spectrum = fig.add_axes([
+        0.045,
+        waterfall_pos.y0,
+        0.105,
+        full_stack_pos[3],
+    ])
+
+    def temporal_psd_of_max_trace(mask):
+        max_trace_db = np.max(db[:, mask], axis=1).astype(np.float64, copy=False)
+        n = int(max_trace_db.size)
+        if n < 2:
+            return np.array([0.0]), np.array([0.0])
+
+        # PSD rows are normally uniformly spaced.  Use the median interval so
+        # a small timestamp jitter does not perturb the frequency axis.
+        dt_s = float(np.median(np.diff(ts_ns).astype(np.float64))) * 1e-9
+        if not np.isfinite(dt_s) or dt_s <= 0.0:
+            return np.array([0.0]), np.array([0.0])
+        sample_rate_hz = 1.0 / dt_s
+
+        # Remove the constant level before the periodogram; otherwise the DC
+        # bin mostly represents the absolute dB/Hz offset of the Max trace and
+        # hides its time variation.  No resampling/window shortening is used:
+        # the FFT consumes all points in the displayed Max trace.
+        trace = max_trace_db - np.mean(max_trace_db)
+        spectrum = np.fft.rfft(trace)
+        psd = (np.abs(spectrum) ** 2) / (sample_rate_hz * n)
+        if n > 2:
+            if n % 2 == 0:
+                psd[1:-1] *= 2.0
+            else:
+                psd[1:] *= 2.0
+        temporal_freq_hz = np.fft.rfftfreq(n, d=dt_s)
+
+        display_mask = temporal_freq_hz <= 100.0
+        temporal_freq_hz = temporal_freq_hz[display_mask]
+        psd = psd[display_mask]
+        tiny = np.finfo(np.float64).tiny
+        psd_db = 10.0 * np.log10(np.maximum(psd, tiny))
+        # The trace is mean-removed, so DC is intentionally zero.  Leave that
+        # point undefined in dB rather than letting a numerical floor stretch
+        # the horizontal scale by thousands of decibels.
+        if psd_db.size:
+            psd_db[0] = np.nan
+        return temporal_freq_hz, psd_db
+
+    temporal_freq_hz, max_trace_psd_db = temporal_psd_of_max_trace(initial_band_mask)
+    peak_spectrum_line, = ax_peak_spectrum.plot(
+        max_trace_psd_db,
+        temporal_freq_hz,
+        linewidth=1.1,
+    )
+    ax_peak_spectrum.set_xlabel("PSD\n(dB)")
+    ax_peak_spectrum.set_ylabel("Temporal frequency (Hz)")
+    temporal_upper_hz = min(100.0, max(1.0, float(temporal_freq_hz[-1])))
+    ax_peak_spectrum.set_ylim(0.0, temporal_upper_hz)
+    # Keep the requested inverted horizontal dB scale, corresponding to the
+    # upper Max-PSD graph viewed as a 90-degree counter-clockwise panel.
+    ax_peak_spectrum.invert_xaxis()
+    ax_peak_spectrum.grid(True, which="major", axis="both", alpha=0.25)
+    ax_peak_spectrum.minorticks_on()
+    ax_peak_spectrum.set_title("PSD of Max", fontsize=9, pad=4)
 
     cax = fig.add_axes([0.90, waterfall_pos.y0, 0.018, waterfall_pos.height])
     cbar_on_pos = cax.get_position().frozen()
@@ -882,8 +954,16 @@ def plot_event(
         )
         mask = bandwidth_mask()
         ax.set_ylim(*(half_band_ylim_khz if bandwidth_state["mode"] == "half" else full_band_ylim_khz))
-        max_psd_line.set_ydata(np.max(db[:, mask], axis=1))
+        max_values = np.max(db[:, mask], axis=1)
+        max_psd_line.set_ydata(max_values)
         median_psd_line.set_ydata(np.median(db[:, mask], axis=1))
+        temporal_freq_hz, max_trace_psd_db = temporal_psd_of_max_trace(mask)
+        peak_spectrum_line.set_data(max_trace_psd_db, temporal_freq_hz)
+        ax_peak_spectrum.set_ylim(
+            0.0, min(100.0, max(1.0, float(temporal_freq_hz[-1])))
+        )
+        ax_peak_spectrum.relim()
+        ax_peak_spectrum.autoscale_view(scalex=True, scaley=False)
         ax_max_power.relim()
         ax_max_power.autoscale_view(scalex=False, scaley=True)
         b_bandwidth.label.set_text(f"Band: {bandwidth_state['mode'].upper()}")

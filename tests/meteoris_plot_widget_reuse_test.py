@@ -245,6 +245,93 @@ class WidgetReuseTest(unittest.TestCase):
                     max_axis.lines[1].get_ydata(), np.median(db_rows, axis=1), atol=1e-4
                 )
 
+    def test_max_trace_temporal_psd_left_panel_uses_all_points(self):
+        mp = load_plot_module()
+        with tempfile.TemporaryDirectory() as tmp:
+            h5_path = Path(tmp) / "max-trace-psd-test.h5"
+            freq = np.array([-2000.0, -1000.0, 0.0, 100.0, 500.0, 1000.0, 2000.0])
+            # Eight time rows at 10 ms spacing -> 100 Hz sample rate and a
+            # one-sided temporal PSD with five bins: 0, 12.5, 25, 37.5, 50 Hz.
+            half_trace = np.array([-50, -45, -55, -40, -52, -47, -58, -43], dtype=np.float32)
+            edge_trace = np.array([-70, -65, -35, -60, -32, -68, -30, -64], dtype=np.float32)
+            db_rows = np.full((8, freq.size), -90.0, dtype=np.float32)
+            db_rows[:, 2] = half_trace
+            db_rows[:, 0] = edge_trace
+            power = np.power(10.0, db_rows / 10.0).astype(np.float32)
+            with h5py.File(h5_path, "w") as h5:
+                psd = h5.create_group("psd")
+                psd.create_dataset("frequency_hz", data=freq)
+                psd.create_dataset("power_density", data=power)
+                psd.create_dataset(
+                    "timestamp_ns",
+                    data=(
+                        np.uint64(1_700_000_000_000_000_000)
+                        + np.arange(8, dtype=np.uint64) * np.uint64(10_000_000)
+                    ),
+                )
+                h5.create_group("metadata").attrs["software_version"] = mp.__version__
+
+            def expected_periodogram_db(trace, sample_rate_hz=100.0):
+                trace = np.asarray(trace, dtype=np.float64)
+                centered = trace - np.mean(trace)
+                spectrum = np.fft.rfft(centered)
+                psd = (np.abs(spectrum) ** 2) / (sample_rate_hz * trace.size)
+                psd[1:-1] *= 2.0
+                return 10.0 * np.log10(np.maximum(psd, np.finfo(np.float64).tiny))
+
+            with h5py.File(h5_path, "r") as h5:
+                ts = h5["/psd/timestamp_ns"][:]
+                event = mp.EventSegment(
+                    ordinal=1, stored_event_id=1, start_row=0, stop_row=8,
+                    start_ns=int(ts[0]), stop_ns=int(ts[-1]),
+                )
+                fig, _ = mp.plot_event(
+                    h5, event, 1, mp.gqrx_colormap(), None, None, None,
+                    mp.PlotConfig(button_bandwidth="half"), None,
+                )
+
+                max_axis = fig.axes[0]
+                waterfall_axis = fig.axes[1]
+                spectrum_axis = fig.axes[2]
+                spectrum_line = spectrum_axis.lines[0]
+
+                self.assertLess(spectrum_axis.get_position().x1, max_axis.get_position().x0)
+                self.assertAlmostEqual(
+                    spectrum_axis.get_position().y0,
+                    waterfall_axis.get_position().y0,
+                    places=6,
+                )
+                self.assertAlmostEqual(
+                    spectrum_axis.get_position().y1,
+                    max_axis.get_position().y1,
+                    places=6,
+                )
+                self.assertEqual(spectrum_axis.get_xlabel(), "PSD\n(dB)")
+                self.assertEqual(spectrum_axis.get_ylabel(), "Temporal frequency (Hz)")
+                self.assertAlmostEqual(spectrum_axis.get_ylim()[0], 0.0)
+                self.assertAlmostEqual(spectrum_axis.get_ylim()[1], 50.0)
+                self.assertGreater(spectrum_axis.get_xlim()[0], spectrum_axis.get_xlim()[1])
+
+                expected_freq = np.fft.rfftfreq(8, d=0.01)
+                np.testing.assert_allclose(spectrum_line.get_ydata(), expected_freq)
+                self.assertTrue(np.isnan(spectrum_line.get_xdata()[0]))
+                np.testing.assert_allclose(
+                    spectrum_line.get_xdata()[1:], expected_periodogram_db(half_trace)[1:], atol=1e-4
+                )
+                # Five one-sided FFT bins proves the calculation consumed all
+                # eight Max-trace points rather than selecting a waterfall row.
+                self.assertEqual(len(spectrum_line.get_ydata()), 5)
+
+                # FULL includes the -2 kHz edge.  Its stronger rows alter the
+                # complete Max trace, so the temporal PSD must update as well.
+                full_trace = np.maximum(half_trace, edge_trace)
+                band_button = fig._meteoris_widgets[5]
+                band_button._observers.process("clicked", None)
+                self.assertTrue(np.isnan(spectrum_line.get_xdata()[0]))
+                np.testing.assert_allclose(
+                    spectrum_line.get_xdata()[1:], expected_periodogram_db(full_trace)[1:], atol=1e-4
+                )
+
     def test_bandwidth_config_validation(self):
         mp = load_plot_module()
         with tempfile.TemporaryDirectory() as tmp:

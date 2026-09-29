@@ -26,81 +26,6 @@ except ModuleNotFoundError:  # pragma: no cover - Python < 3.11
 DEFAULT_INPUT = Path("meteoris.toml")
 DEFAULT_OUTPUT = Path("meteoris.toml.new")
 
-# Smart mode deliberately asks only values that normally need site/operator
-# decisions.  All other settings are still emitted, using current/canonical
-# defaults, so the generated file remains complete and self-documenting.
-SMART_ESSENTIAL = {
-    "sdr.driver",
-    "sdr.sample_rate",
-    "sdr.center_frequency",
-    "sdr.gain",
-    "dsp.shift_hz",
-    "dsp.bandwidth_hz",
-    "runtime.daemon",
-    "logging.level",
-    "logging.file_enabled",
-    "logging.file",
-    "agc.enabled",
-    "network.enabled",
-    "network.bind_address",
-    "recording.mode",
-    "recording.segment_seconds",
-    "recording.segment_count",
-    "detector.plugin",
-    "detector.peak_threshold_db",
-    "detector.pre_context_s",
-    "detector.post_context_s",
-    "detector.max_event_seconds",
-    "output.directory",
-    "output.file_prefix",
-    "output.hdf5_compression",
-    "output.swmr",
-    "output.daily_rotate_time",
-    "output.max_growth_mb_per_min",
-    "output.min_free_space_gb",
-}
-
-EXPLANATION_OVERRIDES = {
-    "sdr.driver": "SoapySDR driver name used to open the receiver.",
-    "sdr.sample_rate": "Input SDR sample rate in samples per second.",
-    "dsp.decimation_stage1": "First DSP decimation factor.",
-    "dsp.decimation_stage2": "Second DSP decimation factor.",
-    "dsp.bandwidth_hz": "Processed output bandwidth after frequency shift and decimation, in Hz.",
-    "psd.fft_size": "Number of samples/bins used by each PSD FFT.",
-    "logging.file": "Base path/name for the text log file.",
-    "logging.daily_rotate_time": "UTC time used as the daily text-log rotation boundary (HH:MM).",
-    "agc.max_gain_db": "Maximum gain the AGC may request; -1 uses the SDR-reported limit.",
-    "detector.post_context_s": "Seconds of PSD context retained after an event becomes inactive.",
-    "detector.stationary.enabled": "Enable stationary/near-zero-drift track detection.",
-    "detector.stationary.max_hz": "Highest frequency offset eligible for stationary detection.",
-    "detector.stationary.activation_fraction": "Minimum occupied fraction of the activation interval for a stationary track.",
-    "detector.chirp.enabled": "Enable drifting/chirp track detection.",
-    "detector.chirp.max_hz": "Highest frequency offset eligible for chirp detection.",
-    "detector.chirp.activation_time_s": "Minimum age before a tentative chirp track can activate.",
-    "detector.chirp.activation_fraction": "Minimum occupied fraction of the activation interval for a chirp track.",
-    "detector.chirp.max_drift_hz_s": "Maximum average drift rate accepted as a chirp, in Hz/s.",
-    "detector.echoes.detection_width_hz": "Width of the Echoes detection interval; <= 0 uses the full band.",
-    "detector.echoes.absolute_upper_db_hz": "Upper absolute-mode trigger threshold in PSD-density dB/Hz.",
-    "detector.echoes.differential_upper_db": "Upper differential-mode trigger threshold for signal-minus-noise in dB.",
-    "detector.echoes.automatic_upper_delta_db": "Automatic-mode amount added above the lower threshold to form the upper threshold.",
-    "detector.echoes.automatic_warmup_s": "Baseline-learning time before automatic threshold detection starts.",
-    "detector.echoes.automatic_baseline_time_constant_s": "Time constant used to adapt the automatic idle baseline.",
-    "detector.echoes.automatic_stddev_window_s": "Window duration used for automatic-mode standard-deviation estimation.",
-    "detector.echoes.automatic_end_stddev_factor": "Standard-deviation multiplier used by the automatic event-end condition.",
-    "detector.meteor_logger.detection_min_hz": "Lowest signed PSD offset searched by the Meteor Logger 3f detector.",
-    "detector.meteor_logger.detection_max_hz": "Highest signed PSD offset searched by the Meteor Logger 3f detector.",
-    "detector.meteor_logger.cluster_width_hz": "Maximum span of the three strongest PSD frequencies, in Hz.",
-    "detector.meteor_logger.sequence_frames": "Confirmation length in PSD frames; use 5 for sensitive or 6 for robust mode.",
-    "detector.meteor_logger.allowed_gaps": "Maximum missing clustered frames in one 3f confirmation sequence.",
-    "detector.meteor_logger.max_drift_hz_s": "Maximum peak-frequency drift accepted by the 3f sequence, in Hz/s.",
-    "detector.meteor_logger.release_s": "Time without a compatible 3f peak before the event becomes inactive.",
-    "detector.meteor_logger.auto_notch_enabled": "Learn and reject persistent clustered interference lines.",
-    "detector.meteor_logger.auto_notch_after_s": "Persistence time before learning an automatic interference notch.",
-    "detector.meteor_logger.auto_notch_width_hz": "Frequency width excluded around each learned interference line.",
-    "detector.meteor_logger.max_auto_notches": "Maximum learned interference notches retained until restart.",
-    "output.file_prefix": "Prefix used when naming daily Meteoris HDF5 files.",
-}
-
 SECTION_RE = re.compile(r"^\s*\[([^\]]+)\]\s*(?:#.*)?$")
 ASSIGN_RE = re.compile(r"^\s*([A-Za-z0-9_-]+)\s*=\s*(.*?)\s*(?:#.*)?$")
 
@@ -113,6 +38,7 @@ class Parameter:
     explanation: str
     section_number: int
     parameter_number: int
+    smart: bool = False
 
     @property
     def dotted(self) -> str:
@@ -152,90 +78,65 @@ def _nested_set(data: dict[str, Any], dotted: str, value: Any) -> None:
 
 
 def _canonical_path() -> Path:
-    # Source-tree use: tools/../conf/meteoris.toml
-    source = Path(__file__).resolve().parent.parent / "conf" / "meteoris.toml"
+    # Unified source of truth: the generated C++ schema and Python config both
+    # read this authoritative TOML file.
+    source = Path(__file__).resolve().parent.parent / "conf" / "parameters.toml"
     if source.is_file():
         return source
 
     # Installed tool: look in common share locations relative to executable.
     exe = Path(sys.argv[0]).resolve()
     candidates = [
-        exe.parent.parent / "share" / "meteoris" / "meteoris.toml",
-        Path("/usr/local/share/meteoris/meteoris.toml"),
-        Path("/usr/share/meteoris/meteoris.toml"),
+        exe.parent.parent / "share" / "meteoris" / "parameters.toml",
+        Path("/usr/local/share/meteoris/parameters.toml"),
+        Path("/usr/share/meteoris/parameters.toml"),
     ]
     for candidate in candidates:
         if candidate.is_file():
             return candidate
     raise FileNotFoundError(
-        "cannot locate canonical conf/meteoris.toml; run from the source tree "
+        "cannot locate canonical conf/parameters.toml; run from the source tree "
         "or install the Meteoris configuration templates"
     )
-
-
-def _brief_comment(comment_lines: list[str], dotted: str) -> str:
-    if not comment_lines:
-        return EXPLANATION_OVERRIDES.get(dotted, f"Meteoris setting {dotted}.")
-    text = " ".join(line.strip().lstrip("#").strip() for line in comment_lines)
-    text = re.sub(r"\s+", " ", text).strip()
-    if not text:
-        return f"Meteoris setting {dotted}."
-    # Prefer the first sentence, but retain a short second clause when the first
-    # sentence is tiny.  Keep prompts readable on terminals.
-    sentence = re.split(r"(?<=[.!?])\s+", text, maxsplit=1)[0]
-    if len(sentence) < 45 and len(text) <= 170:
-        sentence = text
-    if len(sentence) > 180:
-        sentence = sentence[:177].rstrip() + "..."
-    return sentence
 
 
 def load_schema(path: Path) -> tuple[list[Section], dict[str, Any]]:
     if tomllib is None:
         raise RuntimeError("meteoris_config requires Python 3.11+ (tomllib)")
-    text = path.read_text(encoding="utf-8")
-    canonical = tomllib.loads(text)
 
-    sections: list[Section] = []
-    current: Section | None = None
-    pending_comments: list[str] = []
+    data = tomllib.loads(path.read_text(encoding="utf-8"))
+    if "parameter" in data and isinstance(data["parameter"], list):
+        sections_by_name: dict[str, Section] = {}
+        sections: list[Section] = []
+        canonical: dict[str, Any] = {}
 
-    for line in text.splitlines():
-        stripped = line.strip()
-        section_match = SECTION_RE.match(line)
-        if section_match:
-            current = Section(section_match.group(1), len(sections) + 1, [])
-            sections.append(current)
-            pending_comments = []
-            continue
-        if stripped.startswith("#"):
-            pending_comments.append(stripped)
-            continue
-        if not stripped:
-            pending_comments = []
-            continue
-        assign_match = ASSIGN_RE.match(line)
-        if assign_match and current is not None:
-            key = assign_match.group(1)
-            dotted = f"{current.name}.{key}"
-            found, value = _nested_get(canonical, dotted)
-            if not found:
-                raise RuntimeError(f"canonical template parser lost parameter {dotted}")
-            current.parameters.append(
-                Parameter(
-                    section=current.name,
-                    key=key,
-                    canonical_value=value,
-                    explanation=_brief_comment(pending_comments, dotted),
-                    section_number=current.number,
-                    parameter_number=len(current.parameters) + 1,
-                )
+        for item in data["parameter"]:
+            dotted = item["path"]
+            value = item["default"]
+            _nested_set(canonical, dotted, value)
+
+            parts = dotted.split(".")
+            section_name = ".".join(parts[:-1]) if len(parts) > 1 else parts[0]
+            key = parts[-1]
+            if section_name not in sections_by_name:
+                section = Section(section_name, len(sections) + 1, [])
+                sections_by_name[section_name] = section
+                sections.append(section)
+            section = sections_by_name[section_name]
+            parameter = Parameter(
+                section=section_name,
+                key=key,
+                canonical_value=value,
+                explanation=item.get("description", f"Meteoris setting {dotted}."),
+                section_number=section.number,
+                parameter_number=len(section.parameters) + 1,
+                smart=bool(item.get("smart", False)),
             )
-            pending_comments = []
-        else:
-            pending_comments = []
+            section.parameters.append(parameter)
 
-    return sections, canonical
+        return sections, canonical
+
+    raise RuntimeError("conf/parameters.toml must contain a top-level [[parameter]] list")
 
 
 
@@ -360,7 +261,7 @@ def _ordered_parameters(sections: list[Section], mode: str) -> list[Parameter]:
     params = [parameter for section in sections for parameter in section.parameters]
     if mode == "expert":
         return params
-    return [parameter for parameter in params if parameter.dotted in SMART_ESSENTIAL]
+    return [parameter for parameter in params if parameter.smart]
 
 
 def _prompt_parameter(parameter: Parameter, default: Any) -> Any:

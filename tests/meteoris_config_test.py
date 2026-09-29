@@ -19,16 +19,18 @@ SPEC.loader.exec_module(mc)
 
 class MeteorisConfigTests(unittest.TestCase):
     def test_schema_is_complete_and_smart_is_subset(self) -> None:
-        sections, _ = mc.load_schema(ROOT / "conf" / "meteoris.toml")
+        sections, _ = mc.load_schema(ROOT / "conf" / "parameters.toml")
         all_params = [p for s in sections for p in s.parameters]
         smart = mc._ordered_parameters(sections, "smart")
         self.assertGreater(len(all_params), 50)
         self.assertGreater(len(smart), 10)
         self.assertLess(len(smart), len(all_params))
+        self.assertTrue(any(p.smart for p in all_params))
+        self.assertTrue(any(not p.smart for p in all_params))
         self.assertFalse(any(p.explanation.startswith("Meteoris setting") for p in all_params))
 
     def test_current_file_controls_known_order(self) -> None:
-        sections, _ = mc.load_schema(ROOT / "conf" / "meteoris.toml")
+        sections, _ = mc.load_schema(ROOT / "conf" / "parameters.toml")
         with tempfile.TemporaryDirectory() as td:
             current = Path(td) / "current.toml"
             current.write_text(
@@ -53,7 +55,7 @@ class MeteorisConfigTests(unittest.TestCase):
             self.assertEqual(mc._choose_mode(None), "smart")
 
     def test_review_edit_loop_modifies_by_number(self) -> None:
-        sections, values = mc.load_schema(ROOT / "conf" / "meteoris.toml")
+        sections, values = mc.load_schema(ROOT / "conf" / "parameters.toml")
         smart = mc._ordered_parameters(sections, "smart")
         target = smart[0]
         original = mc._nested_get(values, target.dotted)[1]
@@ -81,7 +83,7 @@ class MeteorisConfigTests(unittest.TestCase):
         self.assertEqual(mc._meteoris_version(), (ROOT / "VERSION").read_text(encoding="utf-8").strip())
 
     def test_generated_toml_is_complete_and_parseable(self) -> None:
-        sections, values = mc.load_schema(ROOT / "conf" / "meteoris.toml")
+        sections, values = mc.load_schema(ROOT / "conf" / "parameters.toml")
         with tempfile.TemporaryDirectory() as td:
             out = Path(td) / "new.toml"
             mc._write_toml(out, sections, values, "test")

@@ -9,6 +9,7 @@ path = "sdr.driver"
 type = "string"
 default = "hackrf-htime"
 description = "The SoapySDR driver id of the connected SDR."
+smart = true
 
 [[parameter]]
 path = "sdr.sample_rate"
@@ -16,6 +17,7 @@ type = "float"
 default = 10000000.0
 description = "SDR sample rate."
 min = 0
+smart = true
 
 [[parameter]]
 path = "sdr.center_frequency"
@@ -23,12 +25,14 @@ type = "float"
 default = 0.0
 description = "Set to 0 to leave frequency unchanged by Meteoris."
 min = 0
+smart = true
 
 [[parameter]]
 path = "sdr.gain"
 type = "float"
 default = -1.0
 description = "Initial gain. When AGC is enabled this is the starting value."
+smart = true
 
 [[parameter]]
 path = "simulator.period_s"
@@ -153,6 +157,7 @@ path = "dsp.shift_hz"
 type = "float"
 default = 1000000.0
 description = "off center shift - SDR compensation: +710000 - 1350 = +708650"
+smart = true
 
 [[parameter]]
 path = "dsp.decimation_stage1"
@@ -174,6 +179,7 @@ type = "float"
 default = 100000.0
 description = "Final processed bandwidth."
 min = 0
+smart = true
 
 [[parameter]]
 path = "dsp.attenuation_db"
@@ -194,6 +200,7 @@ path = "runtime.daemon"
 type = "boolean"
 default = false
 description = "Detach from the terminal and run in the background."
+smart = true
 
 # A positive value stops automatically after this many seconds.
 [[parameter]]
@@ -233,6 +240,7 @@ type = "string"
 default = "info"
 description = "Runtime logging level: trace, debug, info, warn, error, critical, or off."
 choices = ["trace", "debug", "info", "warn", "error", "critical", "off"]
+smart = true
 
 [[parameter]]
 path = "logging.color"
@@ -246,12 +254,14 @@ path = "logging.file_enabled"
 type = "boolean"
 default = true
 description = "Write the same selected log levels to a plain text file."
+smart = true
 
 [[parameter]]
 path = "logging.file"
 type = "string"
 default = "meteoris.log"
-description = "Meteoris setting logging.file."
+description = "Base path/name for the text log file."
+smart = true
 
 # Later daily rotations always append/create safely.
 [[parameter]]
@@ -279,6 +289,7 @@ path = "agc.enabled"
 type = "boolean"
 default = false
 description = "Low-cost AGC based on clipping of native CS8 ADC samples."
+smart = true
 
 [[parameter]]
 path = "agc.target_saturation_percent"
@@ -329,12 +340,14 @@ path = "network.enabled"
 type = "boolean"
 default = true
 description = "Browser gateway interface."
+smart = true
 
 [[parameter]]
 path = "network.bind_address"
 type = "string"
 default = "127.0.0.1"
 description = "IPv4 interface to listen on; loopback is safest for a same-host gateway."
+smart = true
 
 [[parameter]]
 path = "network.psd_port"
@@ -365,6 +378,7 @@ type = "string"
 default = "triggered"
 description = "\"triggered\": detector controls recording. \"continuous\": detector is ignored and PSDs are recorded in bounded segments."
 choices = ["triggered", "continuous"]
+smart = true
 
 [[parameter]]
 path = "recording.segment_seconds"
@@ -372,6 +386,7 @@ type = "float"
 default = 15.0
 description = "Maximum continuous segment duration. Used only in continuous mode."
 min = 0
+smart = true
 
 [[parameter]]
 path = "recording.segment_count"
@@ -379,6 +394,7 @@ type = "integer"
 default = 0
 description = "0 = unlimited; otherwise stop cleanly after this many complete segments."
 min = 0
+smart = true
 
 [[parameter]]
 path = "detector.enabled"
@@ -392,6 +408,7 @@ type = "string"
 default = "peak_tracker"
 description = "Compile-time registered detector implementation selected at runtime."
 choices = ["peak_tracker", "echoes_automatic", "meteor_logger_3f"]
+smart = true
 
 [[parameter]]
 path = "detector.threads"
@@ -423,6 +440,7 @@ default = 5.0
 description = "A spectral local maximum becomes a candidate when the doubly-smoothed PSD is this many dB above the current whole-band MEDIAN background."
 min = 0
 plugins = ["peak_tracker"]
+smart = true
 
 [[parameter]]
 path = "detector.min_peak_separation_hz"
@@ -453,6 +471,7 @@ type = "float"
 default = 0.5
 description = "Period to be recorded (s) before start trigger."
 min = 0
+smart = true
 
 [[parameter]]
 path = "detector.post_context_s"
@@ -460,6 +479,7 @@ type = "float"
 default = 1.0
 description = "Period to be recorded (s) after end trigger."
 min = 0
+smart = true
 
 [[parameter]]
 path = "detector.max_event_seconds"
@@ -467,6 +487,7 @@ type = "float"
 default = 15.0
 description = "Maximum event duration. For peak_tracker, an event reaching this limit is discarded completely from HDF5. 0 disables the limit."
 min = 0
+smart = true
 
 [[parameter]]
 path = "detector.rearm_seconds"
@@ -678,7 +699,7 @@ plugins = ["echoes_automatic"]
 path = "detector.echoes.automatic_upper_delta_db"
 type = "float"
 default = 3.0
-description = "Meteoris setting detector.echoes.automatic_upper_delta_db."
+description = "Automatic upper threshold offset above the lower threshold for Echoes detection."
 min = 0
 plugins = ["echoes_automatic"]
 
@@ -686,7 +707,7 @@ plugins = ["echoes_automatic"]
 path = "detector.echoes.automatic_warmup_s"
 type = "float"
 default = 5.0
-description = "Meteoris setting detector.echoes.automatic_warmup_s."
+description = "Warmup time before automatic Echoes threshold learning starts."
 min = 0
 plugins = ["echoes_automatic"]
 
@@ -694,7 +715,7 @@ plugins = ["echoes_automatic"]
 path = "detector.echoes.automatic_baseline_time_constant_s"
 type = "float"
 default = 30.0
-description = "Meteoris setting detector.echoes.automatic_baseline_time_constant_s."
+description = "Time constant for the automatic idle baseline used by Echoes detection."
 min = 0
 plugins = ["echoes_automatic"]
 
@@ -702,7 +723,7 @@ plugins = ["echoes_automatic"]
 path = "detector.echoes.automatic_stddev_window_s"
 type = "float"
 default = 1.0
-description = "Meteoris setting detector.echoes.automatic_stddev_window_s."
+description = "Window duration used when estimating the automatic Echoes threshold spread."
 min = 0
 plugins = ["echoes_automatic"]
 
@@ -710,7 +731,7 @@ plugins = ["echoes_automatic"]
 path = "detector.echoes.automatic_end_stddev_factor"
 type = "float"
 default = 2.0
-description = "Meteoris setting detector.echoes.automatic_end_stddev_factor."
+description = "Multiplier applied to the automatic threshold spread when ending an Echoes event."
 min = 0
 plugins = ["echoes_automatic"]
 
@@ -745,14 +766,14 @@ plugins = ["meteor_logger_3f"]
 path = "detector.meteor_logger.detection_max_hz"
 type = "float"
 default = 49000.0
-description = "Meteoris setting detector.meteor_logger.detection_max_hz."
+description = "Upper signed PSD offset limit searched by the Meteor Logger 3f detector."
 plugins = ["meteor_logger_3f"]
 
 [[parameter]]
 path = "detector.meteor_logger.cluster_width_hz"
 type = "float"
 default = 250.0
-description = "Meteoris setting detector.meteor_logger.cluster_width_hz."
+description = "Maximum span of the three strongest PSD frequencies used to form a cluster."
 min = 0
 plugins = ["meteor_logger_3f"]
 
@@ -769,7 +790,7 @@ plugins = ["meteor_logger_3f"]
 path = "detector.meteor_logger.allowed_gaps"
 type = "integer"
 default = 1
-description = "Meteoris setting detector.meteor_logger.allowed_gaps."
+description = "Maximum number of missing frames allowed inside a 3-frequency confirmation sequence."
 min = 0
 plugins = ["meteor_logger_3f"]
 
@@ -777,7 +798,7 @@ plugins = ["meteor_logger_3f"]
 path = "detector.meteor_logger.max_drift_hz_s"
 type = "float"
 default = 11000.0
-description = "Meteoris setting detector.meteor_logger.max_drift_hz_s."
+description = "Maximum average peak-frequency drift allowed for a Meteor Logger 3f sequence."
 min = 0
 plugins = ["meteor_logger_3f"]
 
@@ -785,7 +806,7 @@ plugins = ["meteor_logger_3f"]
 path = "detector.meteor_logger.release_s"
 type = "float"
 default = 0.15
-description = "Meteoris setting detector.meteor_logger.release_s."
+description = "Time without a compatible 3f peak before the event becomes inactive."
 min = 0
 plugins = ["meteor_logger_3f"]
 
@@ -800,7 +821,7 @@ plugins = ["meteor_logger_3f"]
 path = "detector.meteor_logger.auto_notch_after_s"
 type = "float"
 default = 10.0
-description = "Meteoris setting detector.meteor_logger.auto_notch_after_s."
+description = "Persistence time before learning an automatic interference notch."
 min = 0
 plugins = ["meteor_logger_3f"]
 
@@ -808,7 +829,7 @@ plugins = ["meteor_logger_3f"]
 path = "detector.meteor_logger.auto_notch_width_hz"
 type = "float"
 default = 200.0
-description = "Meteoris setting detector.meteor_logger.auto_notch_width_hz."
+description = "Frequency width excluded around each learned interference line."
 min = 0
 plugins = ["meteor_logger_3f"]
 
@@ -816,7 +837,7 @@ plugins = ["meteor_logger_3f"]
 path = "detector.meteor_logger.max_auto_notches"
 type = "integer"
 default = 4
-description = "Meteoris setting detector.meteor_logger.max_auto_notches."
+description = "Maximum number of learned interference notches retained until restart."
 min = 1
 plugins = ["meteor_logger_3f"]
 
@@ -825,12 +846,14 @@ path = "output.directory"
 type = "string"
 default = "./data"
 description = "One HDF5 file is created/appended per UTC day."
+smart = true
 
 [[parameter]]
 path = "output.file_prefix"
 type = "string"
 default = "meteoris"
-description = "Meteoris setting output.file_prefix."
+description = "Prefix used when naming daily Meteoris HDF5 files."
+smart = true
 
 [[parameter]]
 path = "output.hdf5_compression"
@@ -839,6 +862,7 @@ default = 1
 description = "0 disables gzip; 1 is a good low-CPU default for a real-time recorder."
 min = 0
 max = 9
+smart = true
 
 # Keep enabled to allow meteoris_plot to open the active daily file while
 # Meteoris is recording.
@@ -847,6 +871,7 @@ path = "output.swmr"
 type = "boolean"
 default = true
 description = "HDF5 Single-Writer/Multiple-Reader mode."
+smart = true
 
 # 0 flushes after every saved PSD; 1 second is a low-overhead default.
 [[parameter]]
@@ -864,6 +889,7 @@ path = "output.daily_rotate_time"
 type = "string"
 default = "00:00"
 description = "UTC time when a new logical daily HDF5 file should begin."
+smart = true
 
 # The rate is checked over 10-second windows to ignore short HDF5 allocation bursts.
 # 0 disables the growth-rate safety check.
@@ -873,6 +899,7 @@ type = "float"
 default = 0.0
 description = "Stop Meteoris if the HDF5 file grows faster than this sustained rate."
 min = 0
+smart = true
 
 # 0 disables the free-space safety check.
 [[parameter]]
@@ -881,6 +908,7 @@ type = "float"
 default = 1.0
 description = "Stop Meteoris when available space on the output filesystem falls below this value."
 min = 0
+smart = true
 
 [[constraint]]
 name = "psd_fft_power_of_two"

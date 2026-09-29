@@ -1616,7 +1616,6 @@ public:
     }
 
     bool finished() const { return _finished; }
-    bool eventInProgress() const { return false; }
 
     void printSummary() const
     {

@@ -85,6 +85,7 @@
 #include "fft/fft_backend.hpp"
 #include "version.hpp"
 #include "config_schema.hpp"
+#include "toml_parser.hpp"
 
 #include <limits>
 
@@ -2529,37 +2530,12 @@ void applyTomlValue(Config &c, const std::string &key, const std::string &raw)
 
 void loadToml(Config &c, const std::string &path)
 {
-    std::ifstream f(path.c_str());
-    if (!f) throw std::runtime_error("cannot open config file: " + path);
-    std::string section, line;
-    size_t lineNo = 0;
-    while (std::getline(f, line))
+    const std::vector<toml::KeyValue> entries = toml::parse_entries_from_file(path);
+    for (std::vector<toml::KeyValue>::const_iterator it = entries.begin(); it != entries.end(); ++it)
     {
-        ++lineNo;
-        // Strip comments outside quoted strings.
-        bool quoted = false;
-        size_t comment = std::string::npos;
-        for (size_t i = 0; i < line.size(); ++i)
-        {
-            if (line[i] == '"' && (i == 0 || line[i - 1] != '\\')) quoted = !quoted;
-            if (line[i] == '#' && !quoted) { comment = i; break; }
-        }
-        if (comment != std::string::npos) line.erase(comment);
-        line = trim(line);
-        if (line.empty()) continue;
-        if (line.front() == '[' && line.back() == ']')
-        {
-            section = trim(line.substr(1, line.size() - 2));
-            continue;
-        }
-        const size_t eq = line.find('=');
-        if (eq == std::string::npos)
-            throw std::runtime_error(path + ":" + std::to_string(lineNo) + ": expected key = value");
-        const std::string key = trim(line.substr(0, eq));
-        const std::string full = section.empty() ? key : section + "." + key;
-        try { applyTomlValue(c, full, line.substr(eq + 1)); }
+        try { applyTomlValue(c, it->key, it->raw_value); }
         catch (const std::exception &e)
-        { throw std::runtime_error(path + ":" + std::to_string(lineNo) + ": " + e.what()); }
+        { throw std::runtime_error(path + ":" + std::to_string(it->line) + ": " + e.what()); }
     }
 }
 
@@ -2567,33 +2543,11 @@ void loadToml(Config &c, const std::string &path)
 void validateEffectiveConfigAgainstSchema(const Config &c)
 {
     meteoris_config_schema::Values values;
-    std::istringstream input(effectiveToml(c));
-    std::string section, line;
-    size_t lineNo = 0;
-    while (std::getline(input, line))
+    const std::vector<toml::KeyValue> entries =
+        toml::parse_entries_from_text(effectiveToml(c), "<generated-effective-toml>");
+    for (std::vector<toml::KeyValue>::const_iterator it = entries.begin(); it != entries.end(); ++it)
     {
-        ++lineNo;
-        bool quoted = false;
-        size_t comment = std::string::npos;
-        for (size_t i = 0; i < line.size(); ++i)
-        {
-            if (line[i] == '"' && (i == 0 || line[i - 1] != '\\')) quoted = !quoted;
-            if (!quoted && line[i] == '#') { comment = i; break; }
-        }
-        if (comment != std::string::npos) line.erase(comment);
-        line = trim(line);
-        if (line.empty()) continue;
-        if (line.front() == '[' && line.back() == ']')
-        {
-            section = trim(line.substr(1, line.size() - 2));
-            continue;
-        }
-        const size_t eq = line.find('=');
-        if (eq == std::string::npos)
-            throw std::runtime_error("generated effective TOML has invalid line " + std::to_string(lineNo));
-        const std::string leaf = trim(line.substr(0, eq));
-        const std::string path = section.empty() ? leaf : section + "." + leaf;
-        values.setRaw(path, trim(line.substr(eq + 1)));
+        values.setRaw(it->key, toml::trim_copy(it->raw_value));
     }
     meteoris_config_schema::validateConstraints(values);
 }

@@ -348,11 +348,11 @@ void Server::psdLoop()
             }
 
             PsdWireHeader h{};
-            std::memcpy(h.magic, "MPSD", 4);
-            h.version = 1;
+            std::memcpy(h.magic, "MIQ1", 4);
+            h.version = 2;
             h.headerBytes = static_cast<uint16_t>(sizeof(h));
-            h.payloadBytes = static_cast<uint32_t>(frame->powerDensity.size() * sizeof(float));
-            h.binCount = static_cast<uint32_t>(frame->powerDensity.size());
+            h.payloadBytes = static_cast<uint32_t>(frame->iq.size() * sizeof(float) * 2);
+            h.binCount = static_cast<uint32_t>(frame->iq.size());
             h.frameIndex = frame->frameIndex;
             h.timestampNs = frame->timestampNs;
             h.centerSampleIndex = frame->centerSampleIndex;
@@ -362,7 +362,7 @@ void Server::psdLoop()
             h.frequencyStepHz = _frequencyStepHz;
 
             if (!sendAll(client, &h, sizeof(h)) ||
-                !sendAll(client, frame->powerDensity.data(), h.payloadBytes))
+                !sendAll(client, frame->iq.data(), h.payloadBytes))
             {
                 closeSocket(client);
                 client = invalid_socket;

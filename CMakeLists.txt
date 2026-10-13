@@ -368,6 +368,7 @@ endif()
 
 if(METEORIS_INSTALL_PLOT)
     meteoris_prepare_python_tool(meteoris_plot meteoris_plot.py)
+    meteoris_prepare_python_tool(meteoris_plot_legacy meteoris_plot_legacy.py)
 endif()
 
 if(METEORIS_INSTALL_WEB)

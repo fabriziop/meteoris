@@ -7,6 +7,9 @@ import json
 import pathlib
 import re
 import sys
+import struct
+
+import numpy as np
 
 try:
     from aiohttp import web
@@ -32,6 +35,37 @@ def meteoris_version() -> str:
             return value
     raise RuntimeError("Cannot determine Meteoris version: VERSION file not found")
 
+
+
+def iq_to_psd_packet(header: bytes, payload: bytes) -> bytes:
+    """Convert a raw final-decimator IQ FFT window to the browser's MPSD v1 frame."""
+    if header[:4] != b"MIQ1" or int.from_bytes(header[4:6], "little") != 2:
+        raise ValueError("unsupported raw IQ wire frame")
+    nfft = struct.unpack_from("<I", header, 12)[0]
+    if nfft < 2 or nfft % 2 or len(payload) != nfft * 8:
+        raise ValueError("invalid raw IQ frame size")
+    step = struct.unpack_from("<d", header, 60)[0]
+    # frequencyStartHz/frequencyStepHz are carried by the upstream DSP.
+    start = struct.unpack_from("<d", header, 52)[0]
+    fs = abs(step) * nfft
+    if fs <= 0:
+        raise ValueError("invalid output sampling rate")
+    iq = np.frombuffer(payload, dtype="<f4").reshape(nfft, 2)
+    complex_iq = iq[:, 0] + 1j * iq[:, 1]
+    window = np.hanning(nfft)
+    density = np.abs(np.fft.fft(complex_iq * window)) ** 2 / (fs * np.sum(window ** 2))
+    frequencies = np.fft.fftfreq(nfft, 1 / fs)
+    bins = int(round(((-start) * 2) / abs(step))) + 1
+    indices = np.flatnonzero((frequencies >= start - abs(step)*0.25) &
+                             (frequencies <= -start + abs(step)*0.25))
+    indices = indices[np.argsort(frequencies[indices])]
+    if len(indices) != bins:
+        raise ValueError("IQ/PSD frequency geometry mismatch")
+    out = bytearray(header)
+    out[:4] = b"MPSD"
+    struct.pack_into("<H", out, 4, 1)
+    struct.pack_into("<II", out, 8, bins * 4, bins)
+    return bytes(out) + np.asarray(density[indices], dtype="<f4").tobytes()
 
 class ControlClient:
     def __init__(self, host: str, port: int):
@@ -124,11 +158,11 @@ class Gateway:
                 self.psd_connected = True
                 while self.websockets:
                     header = await reader.readexactly(HEADER_BYTES)
-                    if header[:4] != b"MPSD":
-                        raise RuntimeError("invalid PSD stream magic")
+                    if header[:4] != b"MIQ1":
+                        raise RuntimeError("invalid IQ stream magic")
                     payload_bytes = int.from_bytes(header[8:12], "little")
                     payload = await reader.readexactly(payload_bytes)
-                    frame = header + payload
+                    frame = iq_to_psd_packet(header, payload)
                     dead = []
                     for ws in tuple(self.websockets):
                         try:

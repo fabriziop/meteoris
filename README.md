@@ -518,3 +518,9 @@ CLI overrides include `--log-level`, `--log-color`, and `--no-log-color`.
 ---
 
 Copyright (c) 2026 Fabrizio Pollastri. Licensed under the GNU General Public License v3.0; see `LICENSE`.
+
+
+## Raw I/Q recording (v1)
+
+See [doc/IQ_RECORDING_V1.md](doc/IQ_RECORDING_V1.md) for the new HDF5
+layout, web gateway, Welch reconstruction, and migration notes.

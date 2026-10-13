@@ -92,7 +92,7 @@
 namespace
 {
 constexpr const char *METEORIS_AUTHOR = "Fabrizio Pollastri <mxgbot@gmail.com>";
-constexpr const char *METEORIS_HDF5_FORMAT = "meteoris v0";
+constexpr const char *METEORIS_HDF5_FORMAT = "meteoris v1";
 constexpr const char *METEORIS_HDF5_AUTHOR = "Fabrizio Pollastri";
 
 constexpr double PI = 3.141592653589793238462643383279502884;
@@ -675,6 +675,7 @@ public:
         {
             if (!slot) slot = std::make_shared<PsdFrame>();
             slot->powerDensity.resize(_bandBins.size());
+            slot->iq.resize(_nfft);
         }
         if (_frameWrite >= _frameRing.size()) _frameWrite = 0;
     }
@@ -752,6 +753,7 @@ private:
         {
             slot = std::make_shared<PsdFrame>();
             slot->powerDensity.resize(_bandBins.size());
+            slot->iq.resize(_nfft);
         }
         PsdFrame &frame = *slot;
         if (++_frameWrite == _frameRing.size()) _frameWrite = 0;
@@ -764,6 +766,7 @@ private:
             frame.timestampNs = _startTimestampNs + static_cast<uint64_t>(std::llround(dtNs));
         }
         frame.gainDb = _currentGainDb;
+        std::copy(oldest, oldest + _nfft, frame.iq.begin());
         for (size_t j = 0; j < _bandBins.size(); ++j)
         {
             const size_t k = _bandBins[j];
@@ -1176,6 +1179,9 @@ struct RecorderMetadata
     size_t nfft = 0;
 };
 
+static_assert(sizeof(std::complex<float>) == 2 * sizeof(float),
+              "IQ HDF5 storage requires interleaved float32 complex samples");
+
 class DailyHdf5Writer
 {
 public:
@@ -1196,7 +1202,7 @@ public:
         // daily file.
         const hsize_t row = _rows;
         const hsize_t newRows = row + 1;
-        hsize_t dims2[2] = {newRows, static_cast<hsize_t>(_frequencies.size())};
+        hsize_t dims2[3] = {newRows, static_cast<hsize_t>(_metadata.nfft), 2};
         hsize_t dims1[1] = {newRows};
         h5Check(H5Dset_extent(_dPsd, dims2), "extend PSD");
         h5Check(H5Dset_extent(_dTimestamp, dims1), "extend timestamp");
@@ -1206,12 +1212,12 @@ public:
         h5Check(H5Dset_extent(_dDetectorMax, dims1), "extend detector max");
         h5Check(H5Dset_extent(_dGain, dims1), "extend gain");
 
-        hsize_t start2[2] = {row, 0};
-        hsize_t count2[2] = {1, static_cast<hsize_t>(_frequencies.size())};
+        hsize_t start2[3] = {row, 0, 0};
+        hsize_t count2[3] = {1, static_cast<hsize_t>(_metadata.nfft), 2};
         hid_t fileSpace = H5Dget_space(_dPsd);
-        h5Check(H5Sselect_hyperslab(fileSpace, H5S_SELECT_SET, start2, nullptr, count2, nullptr), "select PSD row");
-        hid_t memSpace = H5Screate_simple(2, count2, nullptr);
-        h5Check(H5Dwrite(_dPsd, H5T_NATIVE_FLOAT, memSpace, fileSpace, H5P_DEFAULT, frame.powerDensity.data()), "write PSD row");
+        h5Check(H5Sselect_hyperslab(fileSpace, H5S_SELECT_SET, start2, nullptr, count2, nullptr), "select IQ row");
+        hid_t memSpace = H5Screate_simple(3, count2, nullptr);
+        h5Check(H5Dwrite(_dPsd, H5T_NATIVE_FLOAT, memSpace, fileSpace, H5P_DEFAULT, frame.iq.data()), "write IQ row");
         H5Sclose(memSpace); H5Sclose(fileSpace);
 
         writeOne(_dTimestamp, row, H5T_NATIVE_UINT64, &frame.timestampNs);
@@ -1235,7 +1241,7 @@ public:
             throw std::runtime_error("cannot grow HDF5 file via truncateRows");
         if (rows == _rows) return;
 
-        hsize_t dims2[2] = {rows, static_cast<hsize_t>(_frequencies.size())};
+        hsize_t dims2[3] = {rows, static_cast<hsize_t>(_metadata.nfft), 2};
         hsize_t dims1[1] = {rows};
         h5Check(H5Dset_extent(_dPsd, dims2), "truncate PSD");
         h5Check(H5Dset_extent(_dTimestamp, dims1), "truncate timestamp");
@@ -1429,7 +1435,7 @@ private:
         if (fapl != H5P_DEFAULT) H5Pclose(fapl);
         if (_file < 0) throw std::runtime_error("cannot create HDF5 file: " + _path);
         hid_t gMeta = H5Gcreate2(_file, "/metadata", H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-        hid_t gPsd = H5Gcreate2(_file, "/psd", H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+        hid_t gPsd = H5Gcreate2(_file, "/iq", H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
         H5Gclose(gPsd);
 
         h5WriteStringAttribute(gMeta, "format", METEORIS_HDF5_FORMAT);
@@ -1451,6 +1457,7 @@ private:
         h5WriteScalarAttribute(gMeta, "decimation_stage1", H5T_NATIVE_UINT64, d1);
         h5WriteScalarAttribute(gMeta, "decimation_stage2", H5T_NATIVE_UINT64, d2);
         h5WriteScalarAttribute(gMeta, "fft_size", H5T_NATIVE_UINT64, nf);
+        h5WriteStringAttribute(gMeta, "iq_layout", "frames x fft_size x 2 (real,imag); 50% overlap; float32 normalized CS8");
         h5WriteStringAttribute(gMeta, "day_boundary",
                                std::string("UTC daily at ") +
                                formatDailyRotateTime(_cfg.outputDailyRotateMinuteUtc));
@@ -1469,26 +1476,26 @@ private:
 
         hsize_t fdims[1] = {static_cast<hsize_t>(_frequencies.size())};
         hid_t fs = H5Screate_simple(1, fdims, nullptr);
-        hid_t fd = H5Dcreate2(_file, "/psd/frequency_hz", H5T_NATIVE_DOUBLE, fs, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+        hid_t fd = H5Dcreate2(_file, "/iq/frequency_hz", H5T_NATIVE_DOUBLE, fs, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
         h5Check(H5Dwrite(fd, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL, H5P_DEFAULT, _frequencies.data()), "write frequencies");
         H5Dclose(fd); H5Sclose(fs);
 
-        hsize_t dims[2] = {0, static_cast<hsize_t>(_frequencies.size())};
-        hsize_t maxdims[2] = {H5S_UNLIMITED, static_cast<hsize_t>(_frequencies.size())};
-        hid_t space = H5Screate_simple(2, dims, maxdims);
+        hsize_t dims[3] = {0, static_cast<hsize_t>(_metadata.nfft), 2};
+        hsize_t maxdims[3] = {H5S_UNLIMITED, static_cast<hsize_t>(_metadata.nfft), 2};
+        hid_t space = H5Screate_simple(3, dims, maxdims);
         hid_t dcpl = H5Pcreate(H5P_DATASET_CREATE);
-        hsize_t chunk[2] = {128, static_cast<hsize_t>(_frequencies.size())};
-        h5Check(H5Pset_chunk(dcpl, 2, chunk), "set PSD chunk");
+        hsize_t chunk[3] = {1, static_cast<hsize_t>(_metadata.nfft), 2};
+        h5Check(H5Pset_chunk(dcpl, 3, chunk), "set PSD chunk");
         if (_cfg.detectorCompression > 0) h5Check(H5Pset_deflate(dcpl, static_cast<unsigned>(_cfg.detectorCompression)), "set gzip");
-        _dPsd = H5Dcreate2(_file, "/psd/power_density", H5T_IEEE_F32LE, space, H5P_DEFAULT, dcpl, H5P_DEFAULT);
+        _dPsd = H5Dcreate2(_file, "/iq/samples", H5T_IEEE_F32LE, space, H5P_DEFAULT, dcpl, H5P_DEFAULT);
         H5Pclose(dcpl); H5Sclose(space);
         if (_dPsd < 0) throw std::runtime_error("cannot create PSD dataset");
-        _dTimestamp = createUnlimited1D("/psd/timestamp_ns", H5T_STD_U64LE);
-        _dFrameIndex = createUnlimited1D("/psd/frame_index", H5T_STD_U64LE);
-        _dEventId = createUnlimited1D("/psd/event_id", H5T_STD_U64LE);
-        _dDetectorState = createUnlimited1D("/psd/detector_state", H5T_STD_U8LE);
-        _dDetectorMax = createUnlimited1D("/psd/detector_max_db_hz", H5T_IEEE_F32LE);
-        _dGain = createUnlimited1D("/psd/gain_db", H5T_IEEE_F32LE);
+        _dTimestamp = createUnlimited1D("/iq/timestamp_ns", H5T_STD_U64LE);
+        _dFrameIndex = createUnlimited1D("/iq/frame_index", H5T_STD_U64LE);
+        _dEventId = createUnlimited1D("/iq/event_id", H5T_STD_U64LE);
+        _dDetectorState = createUnlimited1D("/iq/detector_state", H5T_STD_U8LE);
+        _dDetectorMax = createUnlimited1D("/iq/detector_max_db_hz", H5T_IEEE_F32LE);
+        _dGain = createUnlimited1D("/iq/gain_db", H5T_IEEE_F32LE);
         _rows = 0;
         startSwmr();
         LOG_INFO_STREAM("HDF5_open=" << _path << " (new"
@@ -1497,24 +1504,25 @@ private:
 
     void openExisting()
     {
-        _dPsd = H5Dopen2(_file, "/psd/power_density", H5P_DEFAULT);
-        _dTimestamp = H5Dopen2(_file, "/psd/timestamp_ns", H5P_DEFAULT);
-        _dFrameIndex = H5Dopen2(_file, "/psd/frame_index", H5P_DEFAULT);
-        _dEventId = H5Dopen2(_file, "/psd/event_id", H5P_DEFAULT);
-        _dDetectorState = H5Dopen2(_file, "/psd/detector_state", H5P_DEFAULT);
-        _dDetectorMax = H5Dopen2(_file, "/psd/detector_max_db_hz", H5P_DEFAULT);
-        _dGain = H5Dopen2(_file, "/psd/gain_db", H5P_DEFAULT);
+        _dPsd = H5Dopen2(_file, "/iq/samples", H5P_DEFAULT);
+        _dTimestamp = H5Dopen2(_file, "/iq/timestamp_ns", H5P_DEFAULT);
+        _dFrameIndex = H5Dopen2(_file, "/iq/frame_index", H5P_DEFAULT);
+        _dEventId = H5Dopen2(_file, "/iq/event_id", H5P_DEFAULT);
+        _dDetectorState = H5Dopen2(_file, "/iq/detector_state", H5P_DEFAULT);
+        _dDetectorMax = H5Dopen2(_file, "/iq/detector_max_db_hz", H5P_DEFAULT);
+        _dGain = H5Dopen2(_file, "/iq/gain_db", H5P_DEFAULT);
         if (_dPsd < 0 || _dTimestamp < 0 || _dFrameIndex < 0 || _dEventId < 0 || _dDetectorState < 0 || _dDetectorMax < 0)
             throw std::runtime_error("existing HDF5 file has incompatible schema: " + _path);
         hid_t sp = H5Dget_space(_dPsd);
-        hsize_t dims[2] = {0,0};
+        hsize_t dims[3] = {0,0,0};
+        if (H5Sget_simple_extent_ndims(sp) != 3) throw std::runtime_error("invalid IQ rank");
         H5Sget_simple_extent_dims(sp, dims, nullptr);
         H5Sclose(sp);
-        if (dims[1] != _frequencies.size()) throw std::runtime_error("existing HDF5 PSD bin count mismatch: " + _path);
+        if (dims[1] != _metadata.nfft || dims[2] != 2) throw std::runtime_error("existing HDF5 IQ shape mismatch: " + _path);
         _rows = dims[0];
         if (_dGain < 0)
         {
-            _dGain = createUnlimited1D("/psd/gain_db", H5T_IEEE_F32LE);
+            _dGain = createUnlimited1D("/iq/gain_db", H5T_IEEE_F32LE);
             hsize_t gdims[1] = {_rows};
             h5Check(H5Dset_extent(_dGain, gdims), "extend legacy gain dataset");
             if (_rows > 0)

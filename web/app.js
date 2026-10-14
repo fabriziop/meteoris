@@ -12,10 +12,11 @@ let lastBins = 0;
 let waterfallOrientation = 'horizontal';
 let waterfallRunning = true;
 let configuredBandwidthHz = null;
+let initialBandwidthMode = 'full';
 let bandMinHz = null;
 let bandMaxHz = null;
-let floorDb = -130;
-let ceilingDb = -60;
+let floorDb = -96;
+let ceilingDb = -40;
 
 // A PSD has power but no phase, so receiver audio cannot be reconstructed.
 // Instead, sonify the visible spectrum with one oscillator per frequency band.
@@ -187,12 +188,13 @@ function parseConfiguredBandwidth(toml) {
 function initializeBandControls(bandwidthHz) {
   if (!(bandwidthHz > 0)) return;
   configuredBandwidthHz = bandwidthHz;
-  bandMinHz = -bandwidthHz / 2;
-  bandMaxHz = bandwidthHz / 2;
-  bandMinInput.min = String(bandMinHz);
-  bandMinInput.max = String(bandMaxHz);
-  bandMaxInput.min = String(bandMinHz);
-  bandMaxInput.max = String(bandMaxHz);
+  const fraction = initialBandwidthMode === 'half' ? 0.25 : 0.5;
+  bandMinHz = -bandwidthHz * fraction;
+  bandMaxHz = bandwidthHz * fraction;
+  bandMinInput.min = String(-bandwidthHz / 2);
+  bandMinInput.max = String(bandwidthHz / 2);
+  bandMaxInput.min = String(-bandwidthHz / 2);
+  bandMaxInput.max = String(bandwidthHz / 2);
   bandMinInput.value = String(bandMinHz);
   bandMaxInput.value = String(bandMaxHz);
   updateFrequencyScale();
@@ -460,6 +462,23 @@ function connectPsd() {
 }
 connectPsd();
 
+async function loadUiDefaults() {
+  const response = await fetch('/api/ui-defaults');
+  if (!response.ok) throw new Error('Cannot load web UI defaults');
+  const data = await response.json();
+  const cfg = data.defaults;
+  floorDb = cfg.db_min;
+  ceilingDb = cfg.db_max;
+  document.getElementById('floor').value = String(floorDb);
+  document.getElementById('ceiling').value = String(ceilingDb);
+  initialBandwidthMode = cfg.bandwidth;
+  setWaterfallOrientation(cfg.orientation);
+  setWaterfallRunning(cfg.running);
+  // Audio requires a user gesture in most browsers. Keep it muted until
+  // clicked even when the config requests sound, to avoid autoplay failures.
+  if (cfg.sound) waterfallSound.title += ' (click to enable; browser requires user gesture)';
+}
+
 async function refreshConfig() {
   const r = await fetch('/api/config'); const j = await r.json();
   document.getElementById('config').value = j.ok ? j.toml : `ERROR: ${j.error}`;
@@ -543,7 +562,9 @@ for (const b of document.querySelectorAll('button[data-set]')) b.onclick = async
   if (j.ok) liveInputs[inputId].dirty = false;
   await refreshStatus();
 };
-refreshConfig();
+loadUiDefaults()
+  .catch(err => { document.getElementById('controlMessage').textContent = err.message; })
+  .finally(() => refreshConfig());
 refreshSessionInfo()
   .catch(() => setDspStatus(false))
   .finally(() => { refreshStatus(); setInterval(refreshStatus, 2000); });

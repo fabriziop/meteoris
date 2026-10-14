@@ -401,6 +401,12 @@ install(FILES
     COMPONENT meteoris_runtime
 )
 
+if(METEORIS_INSTALL_WEB)
+    install(FILES conf/meteoris_web.toml
+            DESTINATION ${CMAKE_INSTALL_DATADIR}/meteoris
+            COMPONENT meteoris_runtime)
+endif()
+
 if(METEORIS_INSTALL_PLOT)
     install(FILES
         conf/meteoris_plot.toml

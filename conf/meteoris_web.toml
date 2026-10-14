@@ -1,0 +1,15 @@
+# Default values for the Meteoris browser UI. Reload the gateway after edits.
+# Color-scale values follow meteoris_plot.toml; they are PSD density dB/Hz.
+[color_scale]
+db_min = -96.0
+db_max = -40.0
+
+[display]
+# Initial band: half = central 50% of configured DSP bandwidth.
+bandwidth = "half"
+# Waterfall scrolling direction.
+orientation = "horizontal"
+# Start drawing incoming frames immediately.
+running = true
+# Browsers require a user gesture to start audio, regardless of this setting.
+sound = false

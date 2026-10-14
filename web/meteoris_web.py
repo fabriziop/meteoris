@@ -8,6 +8,7 @@ import pathlib
 import re
 import sys
 import struct
+import tomllib
 
 import numpy as np
 
@@ -213,7 +214,54 @@ def find_web_root(explicit: str | None) -> pathlib.Path:
     raise SystemExit("cannot locate Meteoris web assets; use --web-root")
 
 
-def make_app(gateway: Gateway, web_root: pathlib.Path, listen_ip: str) -> web.Application:
+def load_ui_defaults(path: pathlib.Path) -> dict:
+    """Read the local web UI profile; reject invalid values at startup."""
+    with path.open("rb") as stream:
+        cfg = tomllib.load(stream)
+    color = cfg.get("color_scale", {})
+    display = cfg.get("display", {})
+    def number(name, default):
+        value = color.get(name, default)
+        if isinstance(value, bool) or not isinstance(value, (int, float)) or not -300 <= value <= 100:
+            raise ValueError(f"invalid color_scale.{name} in {path}")
+        return float(value)
+    lo = number("db_min", -96)
+    hi = number("db_max", -40)
+    if lo >= hi:
+        raise ValueError(f"color_scale.db_min must be below db_max in {path}")
+    bandwidth = display.get("bandwidth", "half")
+    orientation = display.get("orientation", "horizontal")
+    running = display.get("running", True)
+    sound = display.get("sound", False)
+    if not isinstance(bandwidth, str) or not isinstance(orientation, str) or bandwidth not in ("full", "half") or orientation not in ("horizontal", "vertical"):
+        raise ValueError(f"invalid display bandwidth/orientation in {path}")
+    if not isinstance(running, bool) or not isinstance(sound, bool):
+        raise ValueError(f"display.running and display.sound must be booleans in {path}")
+    return {"db_min": lo, "db_max": hi, "bandwidth": bandwidth,
+            "orientation": orientation, "running": running, "sound": sound}
+
+
+def find_ui_config(explicit: str | None) -> pathlib.Path:
+    if explicit:
+        path = pathlib.Path(explicit).expanduser().resolve()
+        if not path.is_file():
+            raise SystemExit(f"web UI config not found: {path}")
+        return path
+    here = pathlib.Path(__file__).resolve().parent
+    candidates = (pathlib.Path.cwd() / "meteoris_web.toml",
+                  here / "meteoris_web.toml",
+                  here.parent / "conf" / "meteoris_web.toml",
+                  here.parent / "share" / "meteoris" / "meteoris_web.toml",
+                  pathlib.Path(sys.prefix) / "share" / "meteoris" / "meteoris_web.toml",
+                  pathlib.Path("/usr/local/share/meteoris/meteoris_web.toml"),
+                  pathlib.Path("/usr/share/meteoris/meteoris_web.toml"))
+    for path in candidates:
+        if path.is_file():
+            return path
+    raise SystemExit("cannot locate meteoris_web.toml; use --ui-config")
+
+
+def make_app(gateway: Gateway, web_root: pathlib.Path, listen_ip: str, ui_defaults: dict | None = None) -> web.Application:
     app = web.Application()
 
     def static_response(path: pathlib.Path) -> web.FileResponse:
@@ -238,6 +286,9 @@ def make_app(gateway: Gateway, web_root: pathlib.Path, listen_ip: str) -> web.Ap
             return web.json_response({"ok": True, "toml": value})
         except Exception as exc:
             return web.json_response({"ok": False, "error": str(exc)}, status=503)
+
+    async def ui_defaults_endpoint(_request):
+        return web.json_response({"ok": True, "defaults": ui_defaults or {}})
 
     async def session(_request):
         # --listen is constant for the lifetime of this gateway process. The
@@ -290,6 +341,7 @@ def make_app(gateway: Gateway, web_root: pathlib.Path, listen_ip: str) -> web.Ap
     app.router.add_get("/style.css", lambda r: static_response(web_root / "style.css"))
     app.router.add_get("/api/config", config)
     app.router.add_get("/api/session", session)
+    app.router.add_get("/api/ui-defaults", ui_defaults_endpoint)
     app.router.add_get("/api/status", status)
     app.router.add_post("/api/set", set_parameter)
     app.router.add_get("/ws/psd", websocket)
@@ -307,10 +359,15 @@ def main():
     parser.add_argument("--listen", default="127.0.0.1", help="HTTP bind address")
     parser.add_argument("--http-port", type=int, default=8080)
     parser.add_argument("--web-root")
+    parser.add_argument("--ui-config", help="Web interface defaults TOML file")
     args = parser.parse_args()
 
     gateway = Gateway(args.dsp_host, args.psd_port, args.control_port)
-    app = make_app(gateway, find_web_root(args.web_root), args.listen)
+    try:
+        defaults = load_ui_defaults(find_ui_config(args.ui_config))
+    except (OSError, ValueError, tomllib.TOMLDecodeError) as exc:
+        parser.error(str(exc))
+    app = make_app(gateway, find_web_root(args.web_root), args.listen, defaults)
     web.run_app(app, host=args.listen, port=args.http_port, print=lambda s: print(s))
 
 

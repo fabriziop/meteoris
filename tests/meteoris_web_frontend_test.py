@@ -45,7 +45,7 @@ class MeteorisWebFrontendTest(unittest.TestCase):
         self.assertIn("fetch('/api/session')", app)
         self.assertEqual(app.count("fetch('/api/session')"), 1)
         self.assertNotIn('j.status.listen_ip', app)
-        self.assertIn('make_app(gateway, find_web_root(args.web_root), args.listen)', gateway)
+        self.assertIn('make_app(gateway, find_web_root(args.web_root), args.listen, defaults)', gateway)
         self.assertIn("sessionVersion = j.version || '';", app)
 
     def test_connecting_and_connected_text_share_same_suffix(self) -> None:
@@ -74,8 +74,8 @@ class MeteorisWebFrontendTest(unittest.TestCase):
         self.assertIn("else if (i < 100)", app)
         self.assertIn("else if (i < 150)", app)
         self.assertIn("else if (i < 250)", app)
-        self.assertIn("let floorDb = -130;", app)
-        self.assertIn("let ceilingDb = -60;", app)
+        self.assertIn("let floorDb = -96;", app)
+        self.assertIn("let ceilingDb = -40;", app)
         self.assertIn("drawHorizontal(frame, floorDb, ceilingDb)", app)
 
     def test_waterfall_stop_go_button_toggles_live_updates(self) -> None:
@@ -125,8 +125,8 @@ class MeteorisWebFrontendTest(unittest.TestCase):
         self.assertIn("function parseConfiguredBandwidth(toml)", app)
         self.assertIn("inDsp = section[1].trim() === 'dsp'", app)
         self.assertIn("bandwidth_hz", app)
-        self.assertIn("bandMinHz = -bandwidthHz / 2", app)
-        self.assertIn("bandMaxHz = bandwidthHz / 2", app)
+        self.assertIn("bandMinHz = -bandwidthHz * fraction", app)
+        self.assertIn("bandMaxHz = bandwidthHz * fraction", app)
         self.assertIn("function visibleBinRange(frame)", app)
         self.assertIn("function updateFrequencyScale()", app)
         self.assertIn("tick.style.top = `${100 - position}%`", app)

@@ -184,6 +184,16 @@ class EventSegment:
         return max(0.0, (self.stop_ns - self.start_ns) * 1e-9)
 
 
+def toggle_button_label(feature: str, visible: bool) -> str:
+    """Return a button label that describes the next toggle action."""
+    return f"{feature}: {'off' if visible else 'on'}"
+
+
+def bandwidth_button_label(mode: str) -> str:
+    """Return a bandwidth button label that describes the next toggle action."""
+    return f"BAND: {'full' if mode == 'half' else 'half'}"
+
+
 def gqrx_colormap() -> ListedColormap:
     """Return the classic 256-entry Gqrx-like waterfall palette."""
     rgb = np.zeros((256, 3), dtype=np.float64)
@@ -917,16 +927,14 @@ def plot_event(
                    valinit=vmin, valstep=plot_cfg.slider_step_db)
     s_max = Slider(ax_max, "Color max (dB/Hz)", slider_lo, slider_hi,
                    valinit=vmax, valstep=plot_cfg.slider_step_db)
-    b_bandwidth = Button(
-        ax_bandwidth, f"Band: {bandwidth_state['mode'].upper()}"
-    )
+    b_bandwidth = Button(ax_bandwidth, bandwidth_button_label(bandwidth_state["mode"]))
     b_max_power = Button(
-        ax_max_toggle, "Max PSD: ON" if max_power_state["visible"] else "Max PSD: OFF"
+        ax_max_toggle, toggle_button_label("MAX PSD", max_power_state["visible"])
     )
     b_trigger = Button(
-        ax_trigger, "Trigger: ON" if trigger_state["visible"] else "Trigger: OFF"
+        ax_trigger, toggle_button_label("TRIGGER", trigger_state["visible"])
     )
-    b_grid = Button(ax_grid, "Grid: ON" if grid_state["visible"] else "Grid: OFF")
+    b_grid = Button(ax_grid, toggle_button_label("GRID", grid_state["visible"]))
 
     # Apply configured initial toggle states before the first draw.
     if not max_power_state["visible"]:
@@ -966,7 +974,7 @@ def plot_event(
         ax_peak_spectrum.autoscale_view(scalex=True, scaley=False)
         ax_max_power.relim()
         ax_max_power.autoscale_view(scalex=False, scaley=True)
-        b_bandwidth.label.set_text(f"Band: {bandwidth_state['mode'].upper()}")
+        b_bandwidth.label.set_text(bandwidth_button_label(bandwidth_state["mode"]))
         fig.canvas.draw_idle()
 
     def toggle_max_power(_event=None):
@@ -980,9 +988,7 @@ def plot_event(
         else:
             ax.set_position(full_stack_pos)
             cax.set_position(cbar_off_pos)
-        b_max_power.label.set_text(
-            "Max PSD: ON" if visible else "Max PSD: OFF"
-        )
+        b_max_power.label.set_text(toggle_button_label("MAX PSD", visible))
         fig.canvas.draw_idle()
 
     def toggle_grid(_event=None):
@@ -996,7 +1002,7 @@ def plot_event(
             # Passing style properties together with visible=False makes
             # Matplotlib re-enable the grid and emits a warning.
             ax.grid(False, which="major", axis="both")
-        b_grid.label.set_text("Grid: ON" if grid_state["visible"] else "Grid: OFF")
+        b_grid.label.set_text(toggle_button_label("GRID", grid_state["visible"]))
         fig.canvas.draw_idle()
 
     def toggle_triggers(_event=None):
@@ -1005,9 +1011,7 @@ def plot_event(
             line.set_visible(trigger_state["visible"])
         if trigger_legend is not None:
             trigger_legend.set_visible(trigger_state["visible"])
-        b_trigger.label.set_text(
-            "Trigger: ON" if trigger_state["visible"] else "Trigger: OFF"
-        )
+        b_trigger.label.set_text(toggle_button_label("TRIGGER", trigger_state["visible"]))
         fig.canvas.draw_idle()
 
     s_min.on_changed(update_scale)

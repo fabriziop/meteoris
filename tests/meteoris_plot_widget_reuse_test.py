@@ -6,6 +6,7 @@ from __future__ import annotations
 import importlib.util
 import os
 from pathlib import Path
+import shutil
 import sys
 import tempfile
 import unittest
@@ -31,6 +32,42 @@ def load_plot_module():
 
 
 class WidgetReuseTest(unittest.TestCase):
+    def test_wrapper_loads_sibling_legacy_script_not_stale_pythonpath_module(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            wrapper_path = tmp_path / "meteoris_plot.py"
+            legacy_script_path = tmp_path / "meteoris_plot_legacy"
+            shutil.copy2(REPO / "tools" / "meteoris_plot.py", wrapper_path)
+            shutil.copy2(REPO / "tools" / "meteoris_plot_legacy.py", legacy_script_path)
+            shutil.copy2(REPO / "VERSION", tmp_path / "VERSION")
+
+            stale_dir = tmp_path / "stale"
+            stale_dir.mkdir()
+            (stale_dir / "meteoris_plot_legacy.py").write_text(
+                "__version__ = '0.0.0-stale'\n"
+                "raise RuntimeError('stale module should not be imported')\n",
+                encoding="utf-8",
+            )
+
+            previous = sys.modules.pop("meteoris_plot_legacy", None)
+            sys.path.insert(0, str(stale_dir))
+            try:
+                spec = importlib.util.spec_from_file_location(
+                    "meteoris_plot_loader_test_module", wrapper_path
+                )
+                self.assertIsNotNone(spec)
+                self.assertIsNotNone(spec.loader)
+                module = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(module)
+                self.assertNotEqual(module.__version__, "0.0.0-stale")
+                self.assertEqual(Path(module.legacy.__file__).resolve(), legacy_script_path.resolve())
+            finally:
+                sys.path.pop(0)
+                if previous is not None:
+                    sys.modules["meteoris_plot_legacy"] = previous
+                else:
+                    sys.modules.pop("meteoris_plot_legacy", None)
+
     def test_canvas_widget_callbacks_do_not_accumulate(self):
         mp = load_plot_module()
         with tempfile.TemporaryDirectory() as tmp:
@@ -96,6 +133,12 @@ class WidgetReuseTest(unittest.TestCase):
                         self.assertEqual(counts, baseline_counts)
 
                 self.assertEqual(len(fig._meteoris_widgets), 6)
+                grid_button = fig._meteoris_widgets[4]
+                self.assertEqual(grid_button.label.get_text(), "GRID: on")
+                grid_button._observers.process("clicked", None)
+                self.assertEqual(grid_button.label.get_text(), "GRID: off")
+                grid_button._observers.process("clicked", None)
+                self.assertEqual(grid_button.label.get_text(), "GRID: on")
 
                 # The two color sliders share one horizontal control row.
                 min_slider, max_slider = fig._meteoris_widgets[:2]
@@ -171,10 +214,10 @@ class WidgetReuseTest(unittest.TestCase):
                     self.assertTrue(any(line.get_visible() for line in waterfall_axis.get_xgridlines()))
 
                     widgets = fig._meteoris_widgets
-                    self.assertEqual(widgets[2].label.get_text(), "Max PSD: OFF")
-                    self.assertEqual(widgets[3].label.get_text(), "Trigger: OFF")
-                    self.assertEqual(widgets[4].label.get_text(), "Grid: ON")
-                    self.assertEqual(widgets[5].label.get_text(), "Band: HALF")
+                    self.assertEqual(widgets[2].label.get_text(), "MAX PSD: on")
+                    self.assertEqual(widgets[3].label.get_text(), "TRIGGER: on")
+                    self.assertEqual(widgets[4].label.get_text(), "GRID: off")
+                    self.assertEqual(widgets[5].label.get_text(), "BAND: full")
 
                     trigger_lines = [
                         line for line in waterfall_axis.lines
@@ -221,7 +264,7 @@ class WidgetReuseTest(unittest.TestCase):
                 max_axis = fig.axes[0]
                 band_button = fig._meteoris_widgets[5]
 
-                self.assertEqual(band_button.label.get_text(), "Band: HALF")
+                self.assertEqual(band_button.label.get_text(), "BAND: full")
                 lo, hi = waterfall_axis.get_ylim()
                 self.assertAlmostEqual(lo, -2.0)
                 self.assertAlmostEqual(hi, 2.0)
@@ -234,7 +277,7 @@ class WidgetReuseTest(unittest.TestCase):
                 )
 
                 band_button._observers.process("clicked", None)
-                self.assertEqual(band_button.label.get_text(), "Band: FULL")
+                self.assertEqual(band_button.label.get_text(), "BAND: half")
                 lo, hi = waterfall_axis.get_ylim()
                 self.assertAlmostEqual(lo, -4.0)
                 self.assertAlmostEqual(hi, 4.0)

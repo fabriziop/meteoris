@@ -47,19 +47,58 @@ Examples:
 from __future__ import annotations
 
 __author__ = "Fabrizio Pollastri <mxgbot@gmail.com>"
+import importlib.machinery
+import importlib.util
 import sys
 from pathlib import Path
 
-# Allow loading by file path as well as from an installed command.
-sys.path.insert(0, str(Path(__file__).resolve().parent))
 import tempfile
 
 import h5py
 import numpy as np
 
-import meteoris_plot_legacy as legacy
+def _load_legacy_module():
+    """Load the sibling legacy plot module/script from this installation."""
+    here = Path(__file__).resolve().parent
+    candidates = (
+        here / "meteoris_plot_legacy",
+        here / "meteoris_plot_legacy.py",
+    )
+    for candidate in candidates:
+        if not candidate.exists():
+            continue
+        if candidate.suffix == ".py":
+            spec = importlib.util.spec_from_file_location(
+                "meteoris_plot_legacy", candidate
+            )
+        else:
+            loader = importlib.machinery.SourceFileLoader(
+                "meteoris_plot_legacy", str(candidate)
+            )
+            spec = importlib.util.spec_from_loader("meteoris_plot_legacy", loader)
+        if spec is None or spec.loader is None:
+            continue
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[spec.name] = module
+        try:
+            spec.loader.exec_module(module)
+        except Exception:
+            sys.modules.pop(spec.name, None)
+            raise
+        return module
+    raise SystemExit(
+        "Cannot load meteoris_plot_legacy beside meteoris_plot. "
+        "Expected one of: meteoris_plot_legacy.py or meteoris_plot_legacy."
+    )
+
+
+legacy = _load_legacy_module()
 __version__ = legacy.__version__
-from meteoris_plot_legacy import *  # retain plotting API for existing integrations
+# Retain plotting API for existing integrations that import from meteoris_plot.
+for _name, _value in legacy.__dict__.items():
+    if _name.startswith("_"):
+        continue
+    globals().setdefault(_name, _value)
 
 
 def convert_iq_to_psd(source: Path, target: Path, block_size: int = 64) -> None:

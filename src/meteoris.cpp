@@ -92,7 +92,7 @@
 namespace
 {
 constexpr const char *METEORIS_AUTHOR = "Fabrizio Pollastri <mxgbot@gmail.com>";
-constexpr const char *METEORIS_HDF5_FORMAT = "meteoris v1";
+constexpr const char *METEORIS_HDF5_FORMAT = "meteoris v2";
 constexpr const char *METEORIS_HDF5_AUTHOR = "Fabrizio Pollastri";
 
 constexpr double PI = 3.141592653589793238462643383279502884;
@@ -230,7 +230,7 @@ struct Config
     // Daily HDF5 rotation boundary, minutes after 00:00 UTC.
     int outputDailyRotateMinuteUtc = meteoris_config_schema::defaultHhMmMinutes("output.daily_rotate_time");
     // Safety limits for long-running recording. 0 disables the corresponding check.
-    double outputMaxGrowthMbPerMin = meteoris_config_schema::default_output_max_growth_mb_per_min();
+    double outputMaxFileSizeGb = meteoris_config_schema::default_output_max_file_size_gb();
     double outputMinFreeGb = meteoris_config_schema::default_output_min_free_space_gb();
 
     // Low-cost ADC-clipping AGC. Saturation is measured directly on native
@@ -1202,9 +1202,29 @@ public:
         // daily file.
         const hsize_t row = _rows;
         const hsize_t newRows = row + 1;
-        hsize_t dims2[3] = {newRows, static_cast<hsize_t>(_metadata.nfft), 2};
+        const size_t hop = _metadata.nfft / 2;
+        // A new run starts after an event gap, a discarded event, or a restart.
+        // Preserve the missing first half once per run, not once per frame.
+        const bool newRun = !_hasPreviousFrame || frame.frameIndex != _previousFrameIndex + 1;
+        if (newRun)
+        {
+            hsize_t pdims[3] = {_prefixRows + 1, static_cast<hsize_t>(hop), 2};
+            h5Check(H5Dset_extent(_dPrefix, pdims), "extend IQ run prefix");
+            hsize_t start[3] = {_prefixRows, 0, 0};
+            hsize_t count[3] = {1, static_cast<hsize_t>(hop), 2};
+            hid_t fs = H5Dget_space(_dPrefix);
+            h5Check(H5Sselect_hyperslab(fs, H5S_SELECT_SET, start, nullptr, count, nullptr), "select IQ prefix");
+            hid_t ms = H5Screate_simple(3, count, nullptr);
+            h5Check(H5Dwrite(_dPrefix, H5T_NATIVE_FLOAT, ms, fs, H5P_DEFAULT, frame.iq.data()), "write IQ prefix");
+            H5Sclose(ms); H5Sclose(fs);
+            ++_prefixRows;
+        }
+        _previousFrameIndex = frame.frameIndex;
+        _hasPreviousFrame = true;
+        hsize_t dims2[3] = {newRows, static_cast<hsize_t>(hop), 2};
         hsize_t dims1[1] = {newRows};
         h5Check(H5Dset_extent(_dPsd, dims2), "extend PSD");
+        h5Check(H5Dset_extent(_dPrefixIndex, dims1), "extend IQ prefix index");
         h5Check(H5Dset_extent(_dTimestamp, dims1), "extend timestamp");
         h5Check(H5Dset_extent(_dFrameIndex, dims1), "extend frame index");
         h5Check(H5Dset_extent(_dEventId, dims1), "extend event id");
@@ -1213,13 +1233,15 @@ public:
         h5Check(H5Dset_extent(_dGain, dims1), "extend gain");
 
         hsize_t start2[3] = {row, 0, 0};
-        hsize_t count2[3] = {1, static_cast<hsize_t>(_metadata.nfft), 2};
+        hsize_t count2[3] = {1, static_cast<hsize_t>(hop), 2};
         hid_t fileSpace = H5Dget_space(_dPsd);
         h5Check(H5Sselect_hyperslab(fileSpace, H5S_SELECT_SET, start2, nullptr, count2, nullptr), "select IQ row");
         hid_t memSpace = H5Screate_simple(3, count2, nullptr);
-        h5Check(H5Dwrite(_dPsd, H5T_NATIVE_FLOAT, memSpace, fileSpace, H5P_DEFAULT, frame.iq.data()), "write IQ row");
+        h5Check(H5Dwrite(_dPsd, H5T_NATIVE_FLOAT, memSpace, fileSpace, H5P_DEFAULT, frame.iq.data() + hop), "write IQ row");
         H5Sclose(memSpace); H5Sclose(fileSpace);
 
+        const uint64_t prefixIndex = _prefixRows - 1;
+        writeOne(_dPrefixIndex, row, H5T_NATIVE_UINT64, &prefixIndex);
         writeOne(_dTimestamp, row, H5T_NATIVE_UINT64, &frame.timestampNs);
         writeOne(_dFrameIndex, row, H5T_NATIVE_UINT64, &frame.frameIndex);
         writeOne(_dEventId, row, H5T_NATIVE_UINT64, &eventId);
@@ -1241,9 +1263,10 @@ public:
             throw std::runtime_error("cannot grow HDF5 file via truncateRows");
         if (rows == _rows) return;
 
-        hsize_t dims2[3] = {rows, static_cast<hsize_t>(_metadata.nfft), 2};
+        hsize_t dims2[3] = {rows, static_cast<hsize_t>(_metadata.nfft / 2), 2};
         hsize_t dims1[1] = {rows};
         h5Check(H5Dset_extent(_dPsd, dims2), "truncate PSD");
+        h5Check(H5Dset_extent(_dPrefixIndex, dims1), "truncate prefix index");
         h5Check(H5Dset_extent(_dTimestamp, dims1), "truncate timestamp");
         h5Check(H5Dset_extent(_dFrameIndex, dims1), "truncate frame index");
         h5Check(H5Dset_extent(_dEventId, dims1), "truncate event id");
@@ -1251,6 +1274,7 @@ public:
         h5Check(H5Dset_extent(_dDetectorMax, dims1), "truncate detector max");
         h5Check(H5Dset_extent(_dGain, dims1), "truncate gain");
         _rows = rows;
+        _hasPreviousFrame = false; // Next append must start a fresh retained run.
         _dirty = true;
         flushSwmr(true);
         resetStorageSafety();
@@ -1308,7 +1332,9 @@ private:
 
         // Flush every extendible dataset so SWMR readers can refresh dimensions
         // and then read a mutually consistent published prefix.
-        h5Check(H5Dflush(_dPsd), "SWMR flush PSD");
+        h5Check(H5Dflush(_dPsd), "SWMR flush IQ hops");
+        h5Check(H5Dflush(_dPrefix), "SWMR flush IQ prefixes");
+        h5Check(H5Dflush(_dPrefixIndex), "SWMR flush IQ prefix indices");
         h5Check(H5Dflush(_dTimestamp), "SWMR flush timestamp");
         h5Check(H5Dflush(_dFrameIndex), "SWMR flush frame index");
         h5Check(H5Dflush(_dEventId), "SWMR flush event id");
@@ -1332,32 +1358,16 @@ private:
 
         const uint64_t bytes = fileSizeBytes(_path);
 
-        if (!_storageCheckInitialized)
+        _storageCheckInitialized = true;
+        if (_cfg.outputMaxFileSizeGb > 0.0 &&
+            static_cast<long double>(bytes) >
+                static_cast<long double>(_cfg.outputMaxFileSizeGb) * 1024.0L * 1024.0L * 1024.0L)
         {
-            _storageCheckInitialized = true;
-            _growthStart = now;
-            _growthStartBytes = bytes;
-        }
-        else if (_cfg.outputMaxGrowthMbPerMin > 0.0)
-        {
-            const double elapsed = std::chrono::duration<double>(now - _growthStart).count();
-            // Use a rolling baseline of at least 10 s to avoid false trips from
-            // HDF5 chunk allocation/compression bursts.
-            if (elapsed >= 10.0)
-            {
-                const uint64_t delta = bytes >= _growthStartBytes ? bytes - _growthStartBytes : 0;
-                const double mbPerMin = (double(delta) / (1024.0 * 1024.0)) * (60.0 / elapsed);
-                if (mbPerMin > _cfg.outputMaxGrowthMbPerMin)
-                {
-                    std::ostringstream msg;
-                    msg << "output file growth too high: " << std::fixed << std::setprecision(2)
-                        << mbPerMin << " MB/min > limit " << _cfg.outputMaxGrowthMbPerMin
-                        << " MB/min (" << _path << ")";
-                    throw std::runtime_error(msg.str());
-                }
-                _growthStart = now;
-                _growthStartBytes = bytes;
-            }
+            std::ostringstream msg;
+            msg << "output file size limit exceeded: " << std::fixed << std::setprecision(2)
+                << (double(bytes) / (1024.0 * 1024.0 * 1024.0)) << " GiB > limit "
+                << _cfg.outputMaxFileSizeGb << " GiB (" << _path << ")";
+            throw std::runtime_error(msg.str());
         }
 
         if (_cfg.outputMinFreeGb > 0.0)
@@ -1377,9 +1387,7 @@ private:
     void resetStorageSafety()
     {
         _storageCheckInitialized = false;
-        _growthStartBytes = 0;
         _lastStorageCheck = std::chrono::steady_clock::time_point{};
-        _growthStart = std::chrono::steady_clock::time_point{};
     }
 
     void writeOne(hid_t dataset, hsize_t row, hid_t type, const void *value)
@@ -1457,7 +1465,7 @@ private:
         h5WriteScalarAttribute(gMeta, "decimation_stage1", H5T_NATIVE_UINT64, d1);
         h5WriteScalarAttribute(gMeta, "decimation_stage2", H5T_NATIVE_UINT64, d2);
         h5WriteScalarAttribute(gMeta, "fft_size", H5T_NATIVE_UINT64, nf);
-        h5WriteStringAttribute(gMeta, "iq_layout", "frames x fft_size x 2 (real,imag); 50% overlap; float32 normalized CS8");
+        h5WriteStringAttribute(gMeta, "iq_layout", "frames x (fft_size/2) x 2 float32 IQ hops; segment_prefix contains first half of each run");
         h5WriteStringAttribute(gMeta, "day_boundary",
                                std::string("UTC daily at ") +
                                formatDailyRotateTime(_cfg.outputDailyRotateMinuteUtc));
@@ -1480,15 +1488,18 @@ private:
         h5Check(H5Dwrite(fd, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL, H5P_DEFAULT, _frequencies.data()), "write frequencies");
         H5Dclose(fd); H5Sclose(fs);
 
-        hsize_t dims[3] = {0, static_cast<hsize_t>(_metadata.nfft), 2};
-        hsize_t maxdims[3] = {H5S_UNLIMITED, static_cast<hsize_t>(_metadata.nfft), 2};
+        hsize_t dims[3] = {0, static_cast<hsize_t>(_metadata.nfft / 2), 2};
+        hsize_t maxdims[3] = {H5S_UNLIMITED, static_cast<hsize_t>(_metadata.nfft / 2), 2};
         hid_t space = H5Screate_simple(3, dims, maxdims);
         hid_t dcpl = H5Pcreate(H5P_DATASET_CREATE);
-        hsize_t chunk[3] = {1, static_cast<hsize_t>(_metadata.nfft), 2};
+        hsize_t chunk[3] = {1, static_cast<hsize_t>(_metadata.nfft / 2), 2};
         h5Check(H5Pset_chunk(dcpl, 3, chunk), "set PSD chunk");
         if (_cfg.detectorCompression > 0) h5Check(H5Pset_deflate(dcpl, static_cast<unsigned>(_cfg.detectorCompression)), "set gzip");
         _dPsd = H5Dcreate2(_file, "/iq/samples", H5T_IEEE_F32LE, space, H5P_DEFAULT, dcpl, H5P_DEFAULT);
+        _dPrefix = H5Dcreate2(_file, "/iq/segment_prefix", H5T_IEEE_F32LE, space, H5P_DEFAULT, dcpl, H5P_DEFAULT);
         H5Pclose(dcpl); H5Sclose(space);
+        _dPrefixIndex = createUnlimited1D("/iq/prefix_index", H5T_STD_U64LE);
+        if (_dPrefix < 0 || _dPrefixIndex < 0) throw std::runtime_error("cannot create IQ prefix datasets");
         if (_dPsd < 0) throw std::runtime_error("cannot create PSD dataset");
         _dTimestamp = createUnlimited1D("/iq/timestamp_ns", H5T_STD_U64LE);
         _dFrameIndex = createUnlimited1D("/iq/frame_index", H5T_STD_U64LE);
@@ -1505,21 +1516,30 @@ private:
     void openExisting()
     {
         _dPsd = H5Dopen2(_file, "/iq/samples", H5P_DEFAULT);
+        _dPrefix = H5Dopen2(_file, "/iq/segment_prefix", H5P_DEFAULT);
+        _dPrefixIndex = H5Dopen2(_file, "/iq/prefix_index", H5P_DEFAULT);
         _dTimestamp = H5Dopen2(_file, "/iq/timestamp_ns", H5P_DEFAULT);
         _dFrameIndex = H5Dopen2(_file, "/iq/frame_index", H5P_DEFAULT);
         _dEventId = H5Dopen2(_file, "/iq/event_id", H5P_DEFAULT);
         _dDetectorState = H5Dopen2(_file, "/iq/detector_state", H5P_DEFAULT);
         _dDetectorMax = H5Dopen2(_file, "/iq/detector_max_db_hz", H5P_DEFAULT);
         _dGain = H5Dopen2(_file, "/iq/gain_db", H5P_DEFAULT);
-        if (_dPsd < 0 || _dTimestamp < 0 || _dFrameIndex < 0 || _dEventId < 0 || _dDetectorState < 0 || _dDetectorMax < 0)
+        if (_dPsd < 0 || _dPrefix < 0 || _dPrefixIndex < 0 || _dTimestamp < 0 || _dFrameIndex < 0 || _dEventId < 0 || _dDetectorState < 0 || _dDetectorMax < 0)
             throw std::runtime_error("existing HDF5 file has incompatible schema: " + _path);
         hid_t sp = H5Dget_space(_dPsd);
         hsize_t dims[3] = {0,0,0};
         if (H5Sget_simple_extent_ndims(sp) != 3) throw std::runtime_error("invalid IQ rank");
         H5Sget_simple_extent_dims(sp, dims, nullptr);
         H5Sclose(sp);
-        if (dims[1] != _metadata.nfft || dims[2] != 2) throw std::runtime_error("existing HDF5 IQ shape mismatch: " + _path);
+        if (dims[1] != _metadata.nfft / 2 || dims[2] != 2) throw std::runtime_error("existing HDF5 IQ shape mismatch: " + _path);
         _rows = dims[0];
+        hid_t ps = H5Dget_space(_dPrefix);
+        hsize_t prefixDims[3] = {0, 0, 0};
+        H5Sget_simple_extent_dims(ps, prefixDims, nullptr);
+        H5Sclose(ps);
+        _prefixRows = prefixDims[0];
+        // A restarted process must create a new run even if frame indices repeat.
+        _hasPreviousFrame = false;
         if (_dGain < 0)
         {
             _dGain = createUnlimited1D("/iq/gain_db", H5T_IEEE_F32LE);
@@ -1539,6 +1559,8 @@ private:
     {
         // Publish the final complete prefix before closing the SWMR writer.
         flushSwmr(true);
+        if (_dPrefixIndex >= 0) H5Dclose(_dPrefixIndex);
+        if (_dPrefix >= 0) H5Dclose(_dPrefix);
         if (_dGain >= 0) H5Dclose(_dGain);
         if (_dDetectorMax >= 0) H5Dclose(_dDetectorMax);
         if (_dDetectorState >= 0) H5Dclose(_dDetectorState);
@@ -1547,7 +1569,8 @@ private:
         if (_dTimestamp >= 0) H5Dclose(_dTimestamp);
         if (_dPsd >= 0) H5Dclose(_dPsd);
         if (_file >= 0) { H5Fflush(_file, H5F_SCOPE_GLOBAL); H5Fclose(_file); }
-        _dPsd = _dTimestamp = _dFrameIndex = _dEventId = _dDetectorState = _dDetectorMax = _dGain = -1;
+        _dPsd = _dPrefix = _dPrefixIndex = _dTimestamp = _dFrameIndex = _dEventId = _dDetectorState = _dDetectorMax = _dGain = -1;
+        _prefixRows = 0; _hasPreviousFrame = false;
         _file = -1; _rows = 0;
         _swmrActive = false;
         _dirty = false;
@@ -1558,15 +1581,17 @@ private:
     RecorderMetadata _metadata;
     std::string _day, _path;
     hid_t _file = -1;
+    hid_t _dPrefix = -1, _dPrefixIndex = -1;
+    hsize_t _prefixRows = 0;
+    uint64_t _previousFrameIndex = 0;
+    bool _hasPreviousFrame = false;
     hid_t _dPsd = -1, _dTimestamp = -1, _dFrameIndex = -1, _dEventId = -1, _dDetectorState = -1, _dDetectorMax = -1, _dGain = -1;
     hsize_t _rows = 0;
     bool _swmrActive = false;
     bool _dirty = false;
     std::chrono::steady_clock::time_point _lastSwmrFlush{};
     bool _storageCheckInitialized = false;
-    uint64_t _growthStartBytes = 0;
     std::chrono::steady_clock::time_point _lastStorageCheck{};
-    std::chrono::steady_clock::time_point _growthStart{};
 };
 
 
@@ -2393,7 +2418,7 @@ std::string effectiveToml(const Config &c)
       << "swmr = " << (c.outputSwmr ? "true" : "false") << "\n"
       << "swmr_flush_seconds = " << c.outputSwmrFlushSeconds << "\n"
       << "daily_rotate_time = \"" << formatDailyRotateTime(c.outputDailyRotateMinuteUtc) << "\"\n"
-      << "max_growth_mb_per_min = " << c.outputMaxGrowthMbPerMin << "\n"
+      << "max_file_size_gb = " << c.outputMaxFileSizeGb << "\n"
       << "min_free_space_gb = " << c.outputMinFreeGb << "\n";
     return o.str();
 }
@@ -2531,7 +2556,7 @@ void applyTomlValue(Config &c, const std::string &key, const std::string &raw)
     else if (key == "output.swmr") c.outputSwmr = parseBool(v);
     else if (key == "output.swmr_flush_seconds") c.outputSwmrFlushSeconds = std::stod(v);
     else if (key == "output.daily_rotate_time") c.outputDailyRotateMinuteUtc = parseDailyRotateTime(v);
-    else if (key == "output.max_growth_mb_per_min") c.outputMaxGrowthMbPerMin = std::stod(v);
+    else if (key == "output.max_file_size_gb") c.outputMaxFileSizeGb = std::stod(v);
     else if (key == "output.min_free_space_gb") c.outputMinFreeGb = std::stod(v);
     else throw std::runtime_error("unknown TOML key: " + key);
 }

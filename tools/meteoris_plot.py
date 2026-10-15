@@ -108,7 +108,9 @@ def convert_iq_to_psd(source: Path, target: Path, block_size: int = 64) -> None:
         src.copy('/metadata', dst)
         iq = src['/iq']
         out = dst.create_group('psd')
-        nfft = int(iq['samples'].shape[1])
+        hop = int(iq['samples'].shape[1])
+        packed = 'segment_prefix' in iq and 'prefix_index' in iq
+        nfft = hop * 2 if packed else hop
         if iq['samples'].shape[2] != 2:
             raise ValueError('IQ data must have real and imaginary channels')
         fs = float(src['/metadata'].attrs['output_rate_hz'])
@@ -130,6 +132,16 @@ def convert_iq_to_psd(source: Path, target: Path, block_size: int = 64) -> None:
         for start in range(0, rows, block_size):
             stop = min(rows, start + block_size)
             samples = np.asarray(iq['samples'][start:stop], dtype=np.float64)
+            if packed:
+                indices = np.asarray(iq['prefix_index'][start:stop], dtype=np.int64)
+                frame_ids = np.asarray(iq['frame_index'][start:stop], dtype=np.int64)
+                previous = np.empty_like(samples)
+                for j, row in enumerate(range(start, stop)):
+                    if row > 0 and frame_ids[j] == int(iq['frame_index'][row - 1]) + 1:
+                        previous[j] = iq['samples'][row - 1]
+                    else:
+                        previous[j] = iq['segment_prefix'][indices[j]]
+                samples = np.concatenate((previous, samples), axis=1)
             complex_samples = samples[..., 0] + 1j * samples[..., 1]
             fft = np.fft.fft(complex_samples * window, axis=1)
             power[start:stop] = (np.abs(fft[:, selected]) ** 2 * scale).astype('f4')

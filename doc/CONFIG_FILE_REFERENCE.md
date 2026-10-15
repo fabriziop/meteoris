@@ -1329,7 +1329,7 @@ hdf5_compression = 1
 swmr = true
 swmr_flush_seconds = 1.0
 daily_rotate_time = "00:00"
-max_growth_mb_per_min = 100
+max_file_size_gb = 10
 min_free_space_gb = 2
 ```
 
@@ -1505,27 +1505,26 @@ rotate immediately
 Thus an event spanning 05:59:55 to 06:00:08 with a `06:00` boundary remains
 entirely in the previous file.
 
-## `max_growth_mb_per_min`
+## `max_file_size_gb`
 
 ```toml
-max_growth_mb_per_min = 100
+max_file_size_gb = 10
 ```
 
 **Type:** non-negative number  
-**Unit:** MB/minute
+**Unit:** GiB per file
 
-Storage safety limit for sustained HDF5 file growth.
+Storage safety limit for the size of each HDF5 file.
 
-If the current HDF5 file grows faster than this configured rate, Meteoris
+If the current HDF5 file exceeds this configured size, Meteoris
 performs a controlled shutdown.
 
-The rate is measured over a longer window rather than reacting to individual
-HDF5 allocation bursts.
+The file size is checked periodically during recording.
 
 A value of:
 
 ```toml
-max_growth_mb_per_min = 0
+max_file_size_gb = 0
 ```
 
 disables this safety check.
@@ -1807,7 +1806,7 @@ daily_rotate_time = "00:00"
 # Stop Meteoris if the HDF5 file grows faster than this sustained rate.
 # The rate is checked over 10-second windows to ignore short HDF5
 # allocation bursts. 0 disables the growth-rate safety check.
-max_growth_mb_per_min = 100
+max_file_size_gb = 10
 
 # Stop Meteoris when available space on the output filesystem falls below
 # this value. 0 disables the free-space safety check.

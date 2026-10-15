@@ -891,13 +891,12 @@ default = "00:00"
 description = "UTC time when a new logical daily HDF5 file should begin."
 smart = true
 
-# The rate is checked over 10-second windows to ignore short HDF5 allocation bursts.
-# 0 disables the growth-rate safety check.
+# 0 disables the per-file size limit. Size is measured in GiB (1024^3 bytes).
 [[parameter]]
-path = "output.max_growth_mb_per_min"
+path = "output.max_file_size_gb"
 type = "float"
 default = 0.0
-description = "Stop Meteoris if the HDF5 file grows faster than this sustained rate."
+description = "Stop Meteoris when the current HDF5 file exceeds this size in GiB."
 min = 0
 smart = true
 

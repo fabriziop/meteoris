@@ -247,7 +247,7 @@ daily_rotate_time = "00:00"
 # Stop Meteoris if the HDF5 file grows faster than this sustained rate.
 # The rate is checked over 10-second windows to ignore short HDF5 allocation bursts.
 # 0 disables the growth-rate safety check.
-max_growth_mb_per_min = 100
+max_file_size_gb = 10
 
 # Stop Meteoris when available space on the output filesystem falls below this value.
 # 0 disables the free-space safety check.

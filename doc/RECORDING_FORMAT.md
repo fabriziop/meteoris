@@ -1435,7 +1435,7 @@ HDF5 recording is monitored for excessive file growth.
 Configuration:
 
 ```toml
-max_growth_mb_per_min = 100
+max_file_size_gb = 10
 ```
 
 The writer periodically checks the file size.
@@ -1449,7 +1449,7 @@ error and stops rather than allowing uncontrolled storage consumption.
 Setting:
 
 ```toml
-max_growth_mb_per_min = 0
+max_file_size_gb = 0
 ```
 
 disables this check.

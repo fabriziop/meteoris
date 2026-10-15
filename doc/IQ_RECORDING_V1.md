@@ -1,48 +1,26 @@
-# Meteoris raw-IQ recording v1
+# Raw I/Q recording format v2 (non-overlapping hops)
 
-The output sample rate remains **250,000 complex samples/s**. The receiver's
-last FIR decimator now supplies unwindowed complex float32 samples to the
-recording and live-stream paths. The existing PSD and detector calculation
-still runs inside the receiver for real-time detection and diagnostics.
+The writer now creates `meteoris v2` files. `/iq/samples` stores one new
+`fft_size/2` complex float32 hop per PSD frame, shaped `(frames, fft_size/2, 2)`.
+Each hop contains only the newest half of its corresponding 50%-overlap FFT
+window. No sample is duplicated between consecutive frames.
 
-## HDF5
+For the first frame of a run (including after gaps between events), the missing
+first half is saved once in `/iq/segment_prefix`, shaped
+`(runs, fft_size/2, 2)`. `/iq/prefix_index` maps each frame to its run's
+prefix. `/iq/frame_index` identifies consecutive windows. To reconstruct a
+full FFT window, concatenate the run prefix (first frame of a run) or the
+preceding frame's hop (consecutive frames) with the current frame's hop.
+All frame metadata remains in `/iq/` and the writer continues to support SWMR.
 
-`/metadata/format` is `meteoris v1`. The new `/iq/samples` dataset has
-shape `(frames, fft_size, 2)`, float32 little-endian, with last-axis order
-`[real, imaginary]`. The complex samples are normalized by 128, as in the
-receiver's DSP pipeline. Each frame is a complete **unwindowed FFT input
-window**, and adjacent frames overlap by 50%. Therefore, this is raw I/Q,
-not a contiguous, deduplicated sample stream: overlapping samples are stored
-twice. The first window begins at acquisition sample zero; successive windows
-advance by `fft_size / 2` samples. `frame_index` and `timestamp_ns` refer to
-the window's PSD frame index and center timestamp respectively.
+`meteoris_plot` reads both v1 (overlapping full windows) and v2 (hops plus
+prefixes). The legacy plotter remains dedicated to PSD-format recordings.
+The detector's internal PSD and the network I/Q frame protocol are unchanged.
 
-Per-frame metadata is in `/iq/{timestamp_ns,frame_index,event_id,
-detector_state,detector_max_db_hz,gain_db}`. `/iq/frequency_hz` contains the
-frequency coordinates for reproducing the former band-limited PSD.
-Metadata includes `output_rate_hz`, `psd_bandwidth_hz`, `fft_size`,
-`acquisition_start_ns`, and `iq_layout`. Event recording/selection is still
-triggered by the in-process detector, so not all acquisition windows need be
-saved. To reconstruct a PSD, apply a periodic-symmetric Hann window
-(`numpy.hanning`), complex FFT, and divide squared magnitude by
-`output_rate_hz * sum(window**2)`; select bins within the saved bandwidth.
+**Compatibility:** Existing `meteoris v1` daily files cannot be appended to by
+the v2 writer. Move/rename the old daily HDF5 file before restarting acquisition
+on the same UTC day. Existing v1 files remain readable by the plotter.
 
-The old PSD format `meteoris v0` is documented in `RECORDING_FORMAT.md` and
-can be viewed using `meteoris_plot_legacy.py`. Old files must not be appended
-to as v1 files. Start a new recording directory or filename prefix when
-migrating.
-
-## Plotter and web bridge
-
-`meteoris_plot.py` converts v1 IQ to a temporary PSD-compatible view in
-bounded chunks, then delegates to the established plotting UI. The temporary
-view is a snapshot; refresh within the UI does **not** reread new IQ windows.
-The temporary view also requires disk space. The old plotter is preserved as
-`meteoris_plot_legacy.py`.
-
-The DSP TCP stream sends `MIQ1` version 2 packets with the existing 68-byte
-header layout, and a float32 interleaved IQ payload of `fft_size * 8` bytes.
-`meteoris_web.py` receives IQ, computes the Hann-windowed PSD with NumPy, and
-forwards the existing `MPSD` version 1 packets to the browser. The browser
-protocol and UI are unchanged. The gateway now requires NumPy in addition to
-aiohttp. Each transmitted IQ frame is a complete overlapping FFT window.
+At 250 kS/s the non-overlapping CF32 stream is approximately 120 MB/min
+(decimal) during sustained recording, plus HDF5 metadata. The example TOML
+file-growth safety limit was raised to 160 MiB/min to allow this rate.

@@ -9,6 +9,8 @@
 #include <utility>
 #include <vector>
 
+#include <sstream>
+
 namespace meteoris {
 namespace detector {
 namespace {
@@ -829,7 +831,20 @@ void validatePeakTrackerConfig(const Config &config, const Environment &environm
         environment.frequencyStepHz * double(environment.bins ? environment.bins - 1 : 0);
     auto requireInsideBand = [&](const char *name, bool enabled, double lo, double hi) {
         if (enabled && (lo < loBand || hi > hiBand))
-            throw std::runtime_error(std::string(name) + " frequency range must lie inside detector PSD band");
+        {
+            std::ostringstream msg;
+
+            msg << name
+                << " frequency range [" << lo << ", " << hi
+                << "] Hz exceeds detector PSD band ["
+                << loBand << ", " << hiBand
+                << "] Hz"
+                << " (bins=" << environment.bins
+                << ", step=" << environment.frequencyStepHz
+                << " Hz)";
+
+            throw std::runtime_error(msg.str());
+        }
     };
     requireInsideBand("detector.stationary", c.stationaryEnabled,
                       c.stationaryMinHz, c.stationaryMaxHz);

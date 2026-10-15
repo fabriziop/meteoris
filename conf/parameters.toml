@@ -257,11 +257,25 @@ description = "Write the same selected log levels to a plain text file."
 smart = true
 
 [[parameter]]
+path = "logging.directory"
+type = "string"
+default = "./data"
+description = "Directory for text log files, like output.directory."
+smart = true
+
+[[parameter]]
+path = "logging.file_prefix"
+type = "string"
+default = "meteoris"
+description = "Prefix for text log filenames, like output.file_prefix."
+smart = true
+
+# Deprecated compatibility setting: explicit path overrides directory/prefix.
+[[parameter]]
 path = "logging.file"
 type = "string"
-default = "meteoris.log"
-description = "Base path/name for the text log file."
-smart = true
+default = ""
+description = "Deprecated explicit log file path override. Prefer logging.directory and logging.file_prefix."
 
 # Later daily rotations always append/create safely.
 [[parameter]]

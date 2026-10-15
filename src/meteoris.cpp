@@ -74,6 +74,7 @@
 #include <exception>
 
 #include <spdlog/spdlog.h>
+#include <spdlog/pattern_formatter.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
 #include <spdlog/sinks/basic_file_sink.h>
 #include <spdlog/sinks/base_sink.h>
@@ -167,7 +168,9 @@ struct Config
     // File logging is enabled by default in foreground and daemon mode.
     // The path is relative to the process launch directory unless absolute.
     bool logFileEnabled = meteoris_config_schema::default_logging_file_enabled();
-    std::string logFile = meteoris_config_schema::default_logging_file();
+    std::string logDirectory = meteoris_config_schema::default_logging_directory();
+    std::string logFilePrefix = meteoris_config_schema::default_logging_file_prefix();
+    std::string logFile; // Optional legacy explicit path override.
     bool logFileTruncate = meteoris_config_schema::default_logging_file_truncate();
     // Daily text-log rotation boundary, minutes after 00:00 UTC.
     bool logDailyRotation = meteoris_config_schema::default_logging_daily_rotation();
@@ -2362,7 +2365,8 @@ std::string effectiveToml(const Config &c)
       << "level = \"" << c.logLevel << "\"\n"
       << "color = " << (c.logColor ? "true" : "false") << "\n"
       << "file_enabled = " << (c.logFileEnabled ? "true" : "false") << "\n"
-      << "file = \"" << c.logFile << "\"\n"
+      << "directory = \"" << c.logDirectory << "\"\n"
+      << "file_prefix = \"" << c.logFilePrefix << "\"\n"
       << "file_truncate = " << (c.logFileTruncate ? "true" : "false") << "\n"
       << "daily_rotation = " << (c.logDailyRotation ? "true" : "false") << "\n"
       << "daily_rotate_time = \"" << formatDailyRotateTime(c.logDailyRotateMinuteUtc) << "\"\n\n[agc]\n"
@@ -2520,7 +2524,9 @@ void applyTomlValue(Config &c, const std::string &key, const std::string &raw)
     else if (key == "logging.level") c.logLevel = unquote(v);
     else if (key == "logging.color") c.logColor = parseBool(v);
     else if (key == "logging.file_enabled") c.logFileEnabled = parseBool(v);
-    else if (key == "logging.file") c.logFile = unquote(v);
+    else if (key == "logging.directory") c.logDirectory = unquote(v);
+    else if (key == "logging.file_prefix") c.logFilePrefix = unquote(v);
+    else if (key == "logging.file") c.logFile = unquote(v); // Backward compatibility
     else if (key == "logging.file_truncate") c.logFileTruncate = parseBool(v);
     else if (key == "logging.daily_rotation") c.logDailyRotation = parseBool(v);
     else if (key == "logging.daily_rotate_time") c.logDailyRotateMinuteUtc = parseLoggingDailyRotateTime(v);
@@ -2712,6 +2718,29 @@ private:
     std::ofstream _stream;
 };
 
+// All log timestamps use UTC: MMDDHHMMSS.mmm.
+// The startup/shutdown banners include the year to disambiguate rotations.
+std::string lifecycleTimestampUtc()
+{
+    const std::time_t now = std::time(nullptr);
+    std::tm utc{};
+#if defined(_WIN32)
+    gmtime_s(&utc, &now);
+#else
+    gmtime_r(&now, &utc);
+#endif
+    char stamp[64] = {};
+    if (std::strftime(stamp, sizeof(stamp), "%a %b %d %H:%M:%S %Y UTC", &utc) == 0)
+        throw std::runtime_error("cannot format UTC lifecycle timestamp");
+    return stamp;
+}
+
+void logLifecycle(const char *action, const char *reason)
+{
+    spdlog::info("**** meteoris {}{} @ {} ****", reason, action,
+                 lifecycleTimestampUtc());
+}
+
 void configureLogging(const Config &cfg)
 {
     const spdlog::level::level_enum level = parseLogLevel(cfg.logLevel);
@@ -2736,31 +2765,36 @@ void configureLogging(const Config &cfg)
         console->set_color(spdlog::level::critical, console->red_bold);
 #endif
         // Color only the complete formatted console line.
-        console->set_pattern("%^%E.%e [%l] %v%$");
+        console->set_formatter(std::unique_ptr<spdlog::formatter>(new spdlog::pattern_formatter(
+            "%^%m%d%H%M%S.%e [%l] %v%$", spdlog::pattern_time_type::utc)));
         sinks.push_back(console);
     }
 
     if (cfg.logFileEnabled)
     {
-        if (cfg.logFile.empty())
-            throw std::runtime_error("logging.file must not be empty when file logging is enabled");
+        if (cfg.logFile.empty() && (cfg.logDirectory.empty() || cfg.logFilePrefix.empty()))
+            throw std::runtime_error("logging.directory and logging.file_prefix must not be empty");
+        const std::string logPath = cfg.logFile.empty()
+            ? (cfg.logDirectory + ((cfg.logDirectory.back() == '/' || cfg.logDirectory.back() == '\\') ? "" : "/") + cfg.logFilePrefix + ".log")
+            : cfg.logFile;
 
         spdlog::sink_ptr file;
         if (cfg.logDailyRotation)
         {
             file = std::make_shared<DailyUtcFileSink>(
-                cfg.logFile, cfg.logDailyRotateMinuteUtc, cfg.logFileTruncate);
+                logPath, cfg.logDailyRotateMinuteUtc, cfg.logFileTruncate);
         }
         else
         {
-            const std::string parent = parentDirectory(cfg.logFile);
+            const std::string parent = parentDirectory(logPath);
             if (!parent.empty()) ensureDirectory(parent);
             file = std::make_shared<spdlog::sinks::basic_file_sink_mt>(
-                cfg.logFile, cfg.logFileTruncate);
+                logPath, cfg.logFileTruncate);
         }
 
         // Text logs never contain ANSI color escape sequences.
-        file->set_pattern("%E.%e [%l] %v");
+        file->set_formatter(std::unique_ptr<spdlog::formatter>(new spdlog::pattern_formatter(
+            "%m%d%H%M%S.%e [%l] %v", spdlog::pattern_time_type::utc)));
         sinks.push_back(file);
     }
 
@@ -2825,7 +2859,7 @@ void printUsage(const char *argv0)
               << "  --run-seconds S --shift-hz HZ --decim1 N --decim2 N --bandwidth HZ\n"
               << "  --nfft N --stream-buffers N --direct | --no-direct --fir1-threads 1|2\n"
               << "  --daemon | --no-daemon --log-level LEVEL --log-color | --no-log-color\n"
-              << "  --log-file PATH --log-file-enabled | --no-log-file --log-file-truncate | --log-file-append\n"
+              << "  --log-directory DIR --log-file-prefix PREFIX --log-file PATH --log-file-enabled | --no-log-file --log-file-truncate | --log-file-append\n"
               << "  --log-daily-rotation | --no-log-daily-rotation --log-daily-rotate-time HH:MM\n"
               << "  --agc | --no-agc --agc-target PERCENT --agc-time-constant S\n"
               << "  --agc-clip-level N --agc-min-gain DB --agc-max-gain DB --agc-max-step DB\n"
@@ -2895,6 +2929,8 @@ Config parseArgs(const int argc, char **argv)
         else if (a == "--log-color") c.logColor = true;
         else if (a == "--no-log-color") c.logColor = false;
         else if (a == "--log-file") { c.logFile = next(); c.logFileEnabled = true; }
+        else if (a == "--log-directory") { c.logDirectory = next(); c.logFile.clear(); }
+        else if (a == "--log-file-prefix") { c.logFilePrefix = next(); c.logFile.clear(); }
         else if (a == "--log-file-enabled") c.logFileEnabled = true;
         else if (a == "--no-log-file") c.logFileEnabled = false;
         else if (a == "--log-file-truncate") c.logFileTruncate = true;
@@ -3011,6 +3047,7 @@ int main(int argc, char **argv)
         }
         configureLogging(cfg);
         loggingConfigured = true;
+        logLifecycle("START", "");
         spdlog::info("daemon={}", cfg.daemonMode ? "ON" : "OFF");
 
         // SIGINT/SIGTERM only request shutdown.  The main loop performs all
@@ -3505,6 +3542,7 @@ int main(int argc, char **argv)
 
         SoapySDR::Device::unmake(dev);
         spdlog::info("stopped: sustainable_streaming={}", sustainableStreaming ? "YES" : "NO");
+        logLifecycle("STOP", "");
         spdlog::shutdown();
         return sustainableStreaming ? EXIT_SUCCESS : EXIT_FAILURE;
     }
@@ -3525,6 +3563,7 @@ int main(int argc, char **argv)
         if (loggingConfigured)
         {
             spdlog::error("{}", ex.what());
+            logLifecycle("STOP", "ERROR ");
             spdlog::shutdown();
         }
         else

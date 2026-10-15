@@ -91,14 +91,15 @@ color = true
 # Write the same selected log levels to a plain text file. Enabled by default
 # in both foreground and daemon mode. Daemon mode uses the file only: no syslog.
 file_enabled = true
-file = "meteoris.log"
+directory = "./data"
+file_prefix = "meteoris"
 # false appends if today's dated log already exists; true truncates today's
 # log when Meteoris starts. Later daily rotations always append/create safely.
 file_truncate = false
 
 # Rotate the text log at a fixed UTC boundary, using the same logical-day
-# convention as output.daily_rotate_time. A base "meteoris.log" becomes
-# "meteoris_YYYYMMDD.log".
+# convention as output.daily_rotate_time. The log becomes
+# "./data/meteoris_YYYYMMDD.log".
 daily_rotation = true
 daily_rotate_time = "00:00"
 

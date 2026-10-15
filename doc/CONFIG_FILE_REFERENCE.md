@@ -679,7 +679,8 @@ Reference configuration:
 level = "info"
 color = true
 file_enabled = true
-file = "meteoris.log"
+directory = "./data"
+file_prefix = "meteoris"
 file_truncate = false
 daily_rotation = true
 daily_rotate_time = "00:00"
@@ -734,7 +735,8 @@ destination and is rejected.
 Text log path. Default:
 
 ```toml
-file = "meteoris.log"
+directory = "./data"
+file_prefix = "meteoris"
 ```
 
 A relative path is interpreted relative to the working directory from which
@@ -1699,7 +1701,8 @@ level = "info"
 color = true
 # Plain text logging is enabled by default in foreground and daemon mode.
 file_enabled = true
-file = "meteoris.log"
+directory = "./data"
+file_prefix = "meteoris"
 file_truncate = false
 
 [agc]

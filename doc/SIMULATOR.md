@@ -137,12 +137,13 @@ Text logging is rotated by UTC logical day by default:
 
 ```toml
 [logging]
-file = "meteoris.log"
+directory = "./data"
+file_prefix = "meteoris"
 daily_rotation = true
 daily_rotate_time = "00:00"
 ```
 
-With rotation enabled, `meteoris.log` becomes files such as
+With rotation enabled, `./data/meteoris.log` becomes files such as
 `meteoris_20260829.log`. The `HH:MM` boundary follows the same UTC logical-day
 convention as `output.daily_rotate_time`. Log rotation is independent of HDF5
 events and occurs on the first log message after the configured boundary.
